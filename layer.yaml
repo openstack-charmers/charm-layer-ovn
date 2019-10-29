@@ -1,0 +1,25 @@
+includes:
+  - layer:openstack
+  - interface:ovsdb
+exclude: 
+  - .stestr.conf
+  - .travis.yml
+  - requirements.txt
+  - tests
+  - tox.ini
+  - test-requirements.txt
+  - unit_tests
+options:
+  basic:
+    use_venv: true
+    include_system_packages: false
+repo: https://github.com/openstack-charmers/charm-layer-ovn
+config:
+  deletes:
+  - debug
+  - ssl_ca
+  - ssl_cert
+  - ssl_key
+  - use-internal-endpoints
+  - use-syslog
+  - verbose
