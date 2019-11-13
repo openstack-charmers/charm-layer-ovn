@@ -2,12 +2,14 @@ includes:
   - layer:openstack
   - interface:ovsdb
 exclude: 
+  - .gitignore
   - .stestr.conf
   - .travis.yml
+  - README.md
   - requirements.txt
+  - test-requirements.txt
   - tests
   - tox.ini
-  - test-requirements.txt
   - unit_tests
 options:
   basic:

@@ -8,6 +8,3 @@ tags:
 - openstack
 - networking
 series: []
-requires:
-  ovsdb:
-    interface: ovsdb
