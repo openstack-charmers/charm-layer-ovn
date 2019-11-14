@@ -19,7 +19,7 @@ def _run(*args):
     """Run a process, check result, capture decoded output from STDERR/STDOUT.
 
     :param args: Command and arguments to run
-    :type args: Union
+    :type args: Tuple[str, ...]
     :returns: Information about the completed process
     :rtype: subprocess.CompletedProcess
     :raises subprocess.CalledProcessError
@@ -35,7 +35,7 @@ def add_br(bridge, external_id=None):
     :param bridge: Name of bridge to create
     :type bridge: str
     :param external_id: Key-value pair
-    :type external_id: Option[None,Union[str,str]]
+    :type external_id: Optional[Tuple[str,str]]
     :raises: subprocess.CalledProcessError
     """
     cmd = ['ovs-vsctl', 'add-br', bridge, '--', 'set', 'bridge', bridge,
@@ -64,7 +64,7 @@ def add_port(bridge, port, external_id=None):
     :param port: Name of port as represented in netdev
     :type port: str
     :param external_id: Key-value pair
-    :type external_id: Option[None,Union[str,str]]
+    :type external_id: Optional[Tuple[str,str]]
     :raises: subprocess.CalledProcessError
     """
     _run('ovs-vsctl', 'add-port', bridge, port)
