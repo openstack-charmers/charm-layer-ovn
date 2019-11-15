@@ -94,6 +94,14 @@ class TestOVSDB(test_utils.PatchHelper):
         self.cluster_status.return_value = {'leader': 'self'}
         self.assertTrue(ovn.is_cluster_leader('ovnnb_db'))
 
+    def test_is_northd_active(self):
+        self.patch_object(ovn, 'ovs_appctl')
+        self.ovs_appctl.return_value = 'true\n'
+        self.assertTrue(ovn.is_northd_active())
+        self.ovs_appctl.assert_called_once_with('ovn-northd', 'is-active')
+        self.ovs_appctl.return_value = 'false\n'
+        self.assertFalse(ovn.is_northd_active())
+
     def test_add_br(self):
         self.patch_object(ovn, '_run')
         ovn.add_br('br-x')
