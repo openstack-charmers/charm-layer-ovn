@@ -111,6 +111,18 @@ def is_cluster_leader(target, schema=None):
         return False
 
 
+def is_northd_active():
+    """Query `ovn-northd` for active status.
+
+    :returns: True if local `ovn-northd` instance is active, False otherwise
+    :rtype: bool
+    """
+    try:
+        return ovs_appctl('ovn-northd', 'is-active').rstrip() == 'true'
+    except subprocess.CalledProcessError:
+        return False
+
+
 def add_br(bridge, external_id=None):
     """Add bridge and optionally attach a external_id to bridge.
 
