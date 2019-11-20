@@ -18,10 +18,10 @@ options:
 repo: https://github.com/openstack-charmers/charm-layer-ovn
 config:
   deletes:
-  - debug
-  - ssl_ca
-  - ssl_cert
-  - ssl_key
-  - use-internal-endpoints
-  - use-syslog
-  - verbose
+    - debug
+    - ssl_ca
+    - ssl_cert
+    - ssl_key
+    - use-internal-endpoints
+    - use-syslog
+    - verbose
