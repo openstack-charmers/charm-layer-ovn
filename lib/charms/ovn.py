@@ -118,9 +118,12 @@ def is_northd_active():
     :rtype: bool
     """
     try:
-        return ovs_appctl('ovn-northd', 'is-active').rstrip() == 'true'
+        for line in ovs_appctl('ovn-northd', 'status').splitlines():
+            if line.startswith('Status:') and 'active' in line:
+                return True
     except subprocess.CalledProcessError:
-        return False
+        pass
+    return False
 
 
 def add_br(bridge, external_id=None):

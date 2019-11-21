@@ -32,6 +32,15 @@ Servers:
     22dd (22dd at ssl:10.219.3.137:6643)
 """
 
+NORTHD_STATUS_ACTIVE = """
+Status: active
+"""
+
+
+NORTHD_STATUS_STANDBY = """
+Status: standby
+"""
+
 
 class TestOVSDB(test_utils.PatchHelper):
 
@@ -96,10 +105,10 @@ class TestOVSDB(test_utils.PatchHelper):
 
     def test_is_northd_active(self):
         self.patch_object(ovn, 'ovs_appctl')
-        self.ovs_appctl.return_value = 'true\n'
+        self.ovs_appctl.return_value = NORTHD_STATUS_ACTIVE
         self.assertTrue(ovn.is_northd_active())
-        self.ovs_appctl.assert_called_once_with('ovn-northd', 'is-active')
-        self.ovs_appctl.return_value = 'false\n'
+        self.ovs_appctl.assert_called_once_with('ovn-northd', 'status')
+        self.ovs_appctl.return_value = NORTHD_STATUS_STANDBY
         self.assertFalse(ovn.is_northd_active())
 
     def test_add_br(self):
