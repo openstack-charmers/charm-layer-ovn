@@ -38,13 +38,13 @@ def enable_chassis_reactive_code():
 
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG)
 @reactive.when_not('nova-compute.connected')
-def disable_metadata():
-    reactive.clear_flag('charm.ovn-chassis.enable-openstack-metadata')
+def disable_openstack():
+    reactive.clear_flag('charm.ovn-chassis.enable-openstack')
 
 
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'nova-compute.connected')
-def enable_metadata():
-    reactive.set_flag('charm.ovn-chassis.enable-openstack-metadata')
+def enable_openstack():
+    reactive.set_flag('charm.ovn-chassis.enable-openstack')
     nova_compute = reactive.endpoint_from_flag('nova-compute.connected')
     nova_compute.publish_shared_secret()
     with charm.provide_charm_instance() as charm_instance:

@@ -38,9 +38,9 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'ovsdb.available',
                     'certificates.available',
                     'endpoint.certificates.changed'),
-                'disable_metadata': (
+                'disable_openstack': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,),
-                'enable_metadata': (
+                'enable_openstack': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'nova-compute.connected',),
                 'configure_bridges': (
@@ -48,7 +48,7 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'charm.installed',),
             },
             'when_not': {
-                'disable_metadata': ('nova-compute.connected',),
+                'disable_openstack': ('nova-compute.connected',),
             },
             'when_any': {
                 'configure_bridges': (
@@ -73,20 +73,20 @@ class TestOvnHandlers(test_utils.PatchHelper):
             self.charm
         self.provide_charm_instance().__exit__.return_value = None
 
-    def test_disable_metadata(self):
+    def test_disable_openstack(self):
         self.patch_object(handlers.reactive, 'clear_flag')
-        handlers.disable_metadata()
+        handlers.disable_openstack()
         self.clear_flag.assert_called_once_with(
-            'charm.ovn-chassis.enable-openstack-metadata')
+            'charm.ovn-chassis.enable-openstack')
 
-    def test_enable_metadata(self):
+    def test_enable_openstack(self):
         self.patch_object(handlers.reactive, 'endpoint_from_flag')
         self.patch_object(handlers.reactive, 'set_flag')
         nova_compute = mock.MagicMock()
         self.endpoint_from_flag.return_value = nova_compute
-        handlers.enable_metadata()
+        handlers.enable_openstack()
         self.set_flag.assert_called_once_with(
-            'charm.ovn-chassis.enable-openstack-metadata')
+            'charm.ovn-chassis.enable-openstack')
         nova_compute.publish_shared_secret.assert_called_once_with()
         self.charm.install.assert_called_once_with()
         self.charm.assess_status.assert_called_once_with()

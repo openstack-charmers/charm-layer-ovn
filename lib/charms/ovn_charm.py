@@ -73,9 +73,11 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     adapters_class = OVNChassisCharmRelationAdapters
     required_relations = ['certificates', 'ovsdb']
     python_version = 3
+    enable_openstack = False
 
     def __init__(self, **kwargs):
-        if reactive.is_flag_set('charm.ovn-chassis.enable-openstack-metadata'):
+        if reactive.is_flag_set('charm.ovn-chassis.enable-openstack'):
+            self.enable_openstack = True
             metadata_agent = 'networking-ovn-metadata-agent'
             self.packages.extend(['networking-ovn-metadata-agent', 'haproxy'])
             self.services.append(metadata_agent)
@@ -112,28 +114,41 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             break
 
     def configure_ovs(self, ovsdb_interface):
-            self.run('ovs-vsctl',
-                     'set-ssl',
-                     ovn_key(self.adapters_instance),
-                     ovn_cert(self.adapters_instance),
-                     ovn_ca_cert(self.adapters_instance))
-            self.run('ovs-vsctl',
-                     'set', 'open', '.',
-                     'external-ids:ovn-encap-type=geneve', '--',
-                     'set', 'open', '.',
-                     'external-ids:ovn-encap-ip={}'
-                     .format(ovsdb_interface.cluster_local_addr), '--',
-                     'set', 'open', '.',
-                     'external-ids:system-id={}'
-                     .format(
-                         socket.getfqdn(ovsdb_interface.cluster_local_addr)))
-            self.run('ovs-vsctl',
-                     'set',
-                     'open',
-                     '.',
-                     'external-ids:ovn-remote={}'
-                     .format(','.join(ovsdb_interface.db_sb_connection_strs)))
-            self.restart_all()
+        self.run('ovs-vsctl',
+                 'set-ssl',
+                 ovn_key(self.adapters_instance),
+                 ovn_cert(self.adapters_instance),
+                 ovn_ca_cert(self.adapters_instance))
+        self.run('ovs-vsctl',
+                 'set', 'open', '.',
+                 'external-ids:ovn-encap-type=geneve', '--',
+                 'set', 'open', '.',
+                 'external-ids:ovn-encap-ip={}'
+                 .format(ovsdb_interface.cluster_local_addr), '--',
+                 'set', 'open', '.',
+                 'external-ids:system-id={}'
+                 .format(
+                     socket.getfqdn(ovsdb_interface.cluster_local_addr)))
+        self.run('ovs-vsctl',
+                 'set',
+                 'open',
+                 '.',
+                 'external-ids:ovn-remote={}'
+                 .format(','.join(ovsdb_interface.db_sb_connection_strs)))
+        if self.enable_openstack:
+            # OpenStack Nova expects the local OVSDB server to listen to
+            # TCP port 6640 on localhost.  This is configurable in os-vif,
+            # but the knob is not exposed through Nova.  LP: #1852200
+            target = 'ptcp:6640:127.0.0.1'
+            for el in ovn.SimpleOVSDB(
+                    'ovs-vsctl', 'manager').find('target={}'.format(target)):
+                break
+            else:
+                self.run('ovs-vsctl', '--id', '@manager',
+                         'create', 'Manager', 'target="{}"'.format(target),
+                         '--', 'add', 'Open_vSwitch', '.', 'manager_options',
+                         '@manager')
+        self.restart_all()
 
     def configure_bridges(self):
         # we use the resolve_port method of NeutronPortContext to translate
