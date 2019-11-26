@@ -76,6 +76,9 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     enable_openstack = False
 
     def __init__(self, **kwargs):
+        charms_openstack.adapters.config_property(ovn_key)
+        charms_openstack.adapters.config_property(ovn_cert)
+        charms_openstack.adapters.config_property(ovn_ca_cert)
         if reactive.is_flag_set('charm.ovn-chassis.enable-openstack'):
             self.enable_openstack = True
             metadata_agent = 'networking-ovn-metadata-agent'
