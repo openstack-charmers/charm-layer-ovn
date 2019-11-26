@@ -45,6 +45,9 @@ class Helper(test_utils.PatchHelper):
         self.patch_release(ovn_charm.BaseOVNChassisCharm.release)
         self.patch_object(ovn_charm.reactive, 'is_flag_set',
                           return_value=False)
+        self.patch_object(
+            ovn_charm.charms_openstack.adapters, '_custom_config_properties')
+        self._custom_config_properties.side_effect = {}
         self.target = ovn_charm.BaseOVNChassisCharm()
         # remove the 'is_flag_set' patch so the tests can use it
         self._patches['is_flag_set'].stop()
@@ -66,6 +69,9 @@ class TestOVNChassisCharm(Helper):
     def test_optional_openstack_metadata(self):
         self.assertEquals(self.target.packages, ['ovn-host'])
         self.assertEquals(self.target.services, ['ovn-host'])
+        self.patch_object(
+            ovn_charm.charms_openstack.adapters, '_custom_config_properties')
+        self._custom_config_properties.side_effect = {}
         self.patch_object(ovn_charm.reactive, 'is_flag_set',
                           return_value=True)
         c = ovn_charm.BaseOVNChassisCharm()
@@ -138,7 +144,11 @@ class TestOVNChassisCharm(Helper):
         self.run.reset_mock()
         self.target.enable_openstack = True
         self.patch_object(ovn_charm.ovn, 'SimpleOVSDB')
+        managers = mock.MagicMock()
+        self.SimpleOVSDB.return_value = managers
         self.target.configure_ovs(ovsdb_interface)
+        managers.find.assert_called_once_with(
+            'target="ptcp:6640:127.0.0.1"')
         self.run.assert_has_calls([
             mock.call('ovs-vsctl', 'set-ssl', mock.ANY, mock.ANY, mock.ANY),
             mock.call('ovs-vsctl', 'set', 'open', '.',
