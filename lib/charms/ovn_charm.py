@@ -137,8 +137,9 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                  .format(','.join(ovsdb_interface.db_sb_connection_strs)))
         if self.enable_openstack:
             # OpenStack Nova expects the local OVSDB server to listen to
-            # TCP port 6640 on localhost.  This is configurable in os-vif,
-            # but the knob is not exposed through Nova.  LP: #1852200
+            # TCP port 6640 on localhost.  We use this for the OVN metadata
+            # agent too, as it allows us to run it as a non-root user.
+            # LP: #1852200
             target = 'ptcp:6640:127.0.0.1'
             for el in ovn.SimpleOVSDB(
                     'ovs-vsctl', 'manager').find('target="{}"'.format(target)):
