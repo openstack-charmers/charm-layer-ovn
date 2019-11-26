@@ -141,7 +141,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             # but the knob is not exposed through Nova.  LP: #1852200
             target = 'ptcp:6640:127.0.0.1'
             for el in ovn.SimpleOVSDB(
-                    'ovs-vsctl', 'manager').find('target={}'.format(target)):
+                    'ovs-vsctl', 'manager').find('target="{}"'.format(target)):
                 break
             else:
                 self.run('ovs-vsctl', '--id', '@manager',

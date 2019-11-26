@@ -138,7 +138,11 @@ class TestOVNChassisCharm(Helper):
         self.run.reset_mock()
         self.target.enable_openstack = True
         self.patch_object(ovn_charm.ovn, 'SimpleOVSDB')
+        managers = mock.MagicMock()
+        self.SimpleOVSDB.return_value = managers
         self.target.configure_ovs(ovsdb_interface)
+        managers.find.assert_called_once_with(
+            'target="ptcp:6640:127.0.0.1"')
         self.run.assert_has_calls([
             mock.call('ovs-vsctl', 'set-ssl', mock.ANY, mock.ANY, mock.ANY),
             mock.call('ovs-vsctl', 'set', 'open', '.',
