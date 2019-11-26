@@ -72,9 +72,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     services = ['ovn-host']
     adapters_class = OVNChassisCharmRelationAdapters
     required_relations = ['certificates', 'ovsdb']
-    restart_map = {
-        '/etc/default/ovn-host': ['ovn-host'],
-    }
     python_version = 3
 
     def __init__(self, **kwargs):

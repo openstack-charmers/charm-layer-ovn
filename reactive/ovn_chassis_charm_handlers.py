@@ -49,7 +49,6 @@ def enable_metadata():
     nova_compute.publish_shared_secret()
     with charm.provide_charm_instance() as charm_instance:
         charm_instance.install()
-        charm_instance.render_with_interfaces(nova_compute)
         charm_instance.assess_status()
 
 
@@ -73,5 +72,8 @@ def configure_ovs():
     ovsdb = reactive.endpoint_from_flag('ovsdb.available')
     with charm.provide_charm_instance() as charm_instance:
         charm_instance.configure_ovs(ovsdb)
+        charm_instance.render_with_interfaces(
+            charm.optional_interfaces((ovsdb,),
+                                      'nova-compute.connected'))
         reactive.clear_flag('endpoint.certificates.changed')
         charm_instance.assess_status()

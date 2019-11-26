@@ -89,7 +89,6 @@ class TestOvnHandlers(test_utils.PatchHelper):
             'charm.ovn-chassis.enable-openstack-metadata')
         nova_compute.publish_shared_secret.assert_called_once_with()
         self.charm.install.assert_called_once_with()
-        self.charm.render_with_interfaces.assert_called_once_with(nova_compute)
         self.charm.assess_status.assert_called_once_with()
 
     def configure_ovs(self):
@@ -98,6 +97,8 @@ class TestOvnHandlers(test_utils.PatchHelper):
         ovsdb = mock.MagicMock()
         self.endpoint_from_flag.return_value = ovsdb
         self.charm.configure_ovs.assert_called_once_with(ovsdb)
+        self.charm.render_with_interfaces.assert_called_once_with(
+            (ovsdb),)
         self.clear_flag.assert_called_once_with(
             'endpoint.certificates.changed')
         self.charm.assess_status.assert_called_once_with()
