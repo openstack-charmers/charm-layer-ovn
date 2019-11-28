@@ -133,8 +133,10 @@ class TestOVSDB(test_utils.PatchHelper):
     def test_add_port(self):
         self.patch_object(ovn, '_run')
         ovn.add_port('br-x', 'enp3s0f0')
-        self._run.assert_called_once_with(
-            'ovs-vsctl', 'add-port', 'br-x', 'enp3s0f0')
+        self._run.assert_has_calls([
+            mock.call('ip', 'link', 'set', 'enp3s0f0', 'up'),
+            mock.call('ovs-vsctl', 'add-port', 'br-x', 'enp3s0f0'),
+        ])
 
     def test_list_ports(self):
         self.patch_object(ovn, '_run')
