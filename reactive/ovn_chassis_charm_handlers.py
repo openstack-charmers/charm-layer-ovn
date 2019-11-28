@@ -30,6 +30,7 @@ def enable_chassis_reactive_code():
     charm.use_defaults(
         'charm.installed',
         'config.changed',
+        'config.rendered',
         'update-status',
         'upgrade-charm',
         'certificates.available',
@@ -76,4 +77,5 @@ def configure_ovs():
             charm.optional_interfaces((ovsdb,),
                                       'nova-compute.connected'))
         reactive.clear_flag('endpoint.certificates.changed')
+        reactive.set_flag('config.rendered')
         charm_instance.assess_status()

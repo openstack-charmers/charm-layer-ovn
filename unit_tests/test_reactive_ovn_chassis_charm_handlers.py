@@ -25,6 +25,7 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
         defaults = [
             'charm.installed',
             'config.changed',
+            'config.rendered',
             'update-status',
             'upgrade-charm',
             'certificates.available',
@@ -59,6 +60,7 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
         }
         # test that the hooks were registered via the
         # reactive.ovn_handlers
+        handlers.enable_chassis_reactive_code()
         self.registered_hooks_test_helper(handlers, hook_set, defaults)
 
 
