@@ -1,5 +1,6 @@
 import mock
 import subprocess
+import uuid
 
 import charms_openstack.test_utils as test_utils
 
@@ -169,30 +170,32 @@ class TestSimpleOVSDB(Helper):
         self._run.return_value = cp
         self.maxDiff = None
         expect = {
-            '_uuid': '1e21ba48-61ff-4b32-b35e-cb80411da351',
+            '_uuid': uuid.UUID('1e21ba48-61ff-4b32-b35e-cb80411da351'),
             'auto_attach': [],
             'controller': [],
             'datapath_id': '0000a0369fdd3890',
             'datapath_type': '',
             'datapath_version': '<unknown>',
-            'external_ids': [['charm-ovn-chassis', 'managed'],
-                             ['other', 'value']],
+            'external_ids': {
+                'charm-ovn-chassis': 'managed',
+                'other': 'value',
+            },
             'fail_mode': [],
             'flood_vlans': [],
-            'flow_tables': [],
+            'flow_tables': {},
             'ipfix': [],
             'mcast_snooping_enable': False,
             'mirrors': [],
             'name': 'br-test',
             'netflow': [],
-            'other_config': [],
+            'other_config': {},
             'ports': [['uuid', '617f9359-77e2-41be-8af6-4c44e7a6bcc3'],
                       ['uuid', 'da840476-8809-4107-8733-591f4696f056']],
             'protocols': [],
             'rstp_enable': False,
-            'rstp_status': [],
+            'rstp_status': {},
             'sflow': [],
-            'status': [],
+            'status': {},
             'stp_enable': False}
         # this in effect also tests the __iter__ front end method
         for el in self.target:

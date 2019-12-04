@@ -14,6 +14,7 @@
 import json
 import os
 import subprocess
+import uuid
 
 
 OVS_RUNDIR = '/var/run/openvswitch'
@@ -232,6 +233,22 @@ class SimpleOVSDB(object):
         self.tbl = table
 
     def _find_tbl(self, condition=None):
+        """Run and parse output of OVSDB `find` command.
+
+        :param condition: An optional RFC 7047 5.1 match condition
+        :type condition: Optional[str]
+        :returns: Dictionary with data
+        :rtype: Dict[str, any]
+        """
+        # When using json formatted output to OVS commands Internal OVSDB
+        # notation may occur that require further deserializing.
+        # Reference: https://tools.ietf.org/html/rfc7047#section-5.1
+        ovs_type_cb_map = {
+            'uuid': uuid.UUID,
+            # FIXME sets also appear to sometimes contain type/value tuples
+            'set': list,
+            'map': dict,
+        }
         cmd = [self.tool, '-f', 'json', 'find', self.tbl]
         if condition:
             cmd.append(condition)
@@ -241,7 +258,8 @@ class SimpleOVSDB(object):
             values = []
             for col in row:
                 if isinstance(col, list):
-                    values.append(col[1])
+                    f = ovs_type_cb_map.get(col[0], str)
+                    values.append(f(col[1]))
                 else:
                     values.append(col)
             yield dict(zip(data['headings'], values))
