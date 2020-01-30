@@ -165,7 +165,6 @@ def add_port(bridge, port, external_id=None):
     :type external_id: Optional[Tuple[str,str]]
     :raises: subprocess.CalledProcessError
     """
-    _run('ip', 'link', 'set', port, 'up')
     _run('ovs-vsctl', 'add-port', bridge, port)
     if external_id:
         ports = SimpleOVSDB('ovs-vsctl', 'port')
