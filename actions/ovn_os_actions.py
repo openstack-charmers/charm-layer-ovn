@@ -15,14 +15,12 @@
 
 import sys
 
+
 sys.path.append('actions')
-sys.path.append('lib')
+
 
 import os_actions
-import charms.ovn_central  # noqa
 
 
-# The OVN charms has different placement of the charm class and we need this
-# glue to make the actions provided by `layer-openstack` to work.
 if __name__ == "__main__":
     sys.exit(os_actions.main(sys.argv))
