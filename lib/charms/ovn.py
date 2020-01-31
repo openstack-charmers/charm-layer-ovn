@@ -154,24 +154,54 @@ def del_br(bridge):
     _run('ovs-vsctl', 'del-br', bridge)
 
 
-def add_port(bridge, port, external_id=None):
-    """Add port to bridge and optionally attach a external_id to port.
+def add_port(bridge, port, ifdata=None, exclusive=False):
+    """Add port to bridge and optionally set/update interface data for it
 
     :param bridge: Name of bridge to attach port to
     :type bridge: str
     :param port: Name of port as represented in netdev
     :type port: str
-    :param external_id: Key-value pair
-    :type external_id: Optional[Tuple[str,str]]
+    :param ifdata: Additional data to attach to interface
+        The keys in the ifdata dictionary map directly to column names in the
+        OpenvSwitch Interface table as defined in DB-SCHEMA [0] referenced in
+        RFC 7047 [1]
+
+        There are some established conventions for keys in the external-ids
+        column of various tables, consult the OVS Integration Guide [2] for
+        more details.
+
+        NOTE(fnordahl): Technically the ``external-ids`` column is called
+        ``external_ids`` (with an underscore) and we rely on ``ovs-vsctl``'s
+        behaviour of transforming dashes to underscores for us [3] so we can
+        have a more pleasant data structure.
+
+        0: http://www.openvswitch.org/ovs-vswitchd.conf.db.5.pdf
+        1: https://tools.ietf.org/html/rfc7047
+        2: http://docs.openvswitch.org/en/latest/topics/integration/
+        3: https://github.com/openvswitch/ovs/blob/
+               20dac08fdcce4b7fda1d07add3b346aa9751cfbc/
+                   lib/db-ctl-base.c#L189-L215
+    :type ifdata: Optional[Dict[str,Union[str,Dict[str,str]]]]
+    :param exclusive: If True, raise exception if port exists
+    :type exclusive: bool
     :raises: subprocess.CalledProcessError
     """
-    _run('ovs-vsctl', 'add-port', bridge, port)
-    if external_id:
-        ports = SimpleOVSDB('ovs-vsctl', 'port')
-        for port in ports.find('name={}'.format(port)):
-            ports.set(port['_uuid'],
-                      'external_ids:{}'.format(external_id[0]),
-                      external_id[1])
+    cmd = ['ovs-vsctl']
+    if not exclusive:
+        cmd.extend(('--may-exist',))
+    cmd.extend(('add-port', bridge, port))
+    if ifdata:
+        for (k, v) in ifdata.items():
+            if isinstance(v, dict):
+                entries = {
+                    '{}:{}'.format(k, dk): dv for (dk, dv) in v.items()}
+            else:
+                entries = {k: v}
+            for (colk, colv) in entries.items():
+                cmd.extend(
+                    ('--', 'set', 'Interface', port,
+                        '{}={}'.format(colk, colv)))
+    _run(*cmd)
 
 
 def del_port(bridge, port):

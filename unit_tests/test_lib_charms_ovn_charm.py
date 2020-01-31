@@ -221,9 +221,11 @@ class TestOVNChassisCharm(Helper):
         ], any_order=True)
         self.add_port.assert_has_calls([
             mock.call(
-                'br-provider', 'eth0', ('charm-ovn-chassis', 'br-provider')),
+                'br-provider', 'eth0', ifdata={
+                    'external-ids': {'charm-ovn-chassis': 'br-provider'}}),
             mock.call(
-                'br-other', 'eth5', ('charm-ovn-chassis', 'br-other')),
+                'br-other', 'eth5', ifdata={
+                    'external-ids': {'charm-ovn-chassis': 'br-other'}}),
         ], any_order=True)
         self.run.assert_has_calls([
             mock.call('ip', 'link', 'set', 'eth0', 'up'),

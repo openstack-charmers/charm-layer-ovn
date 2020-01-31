@@ -135,7 +135,45 @@ class TestOVSDB(test_utils.PatchHelper):
         self.patch_object(ovn, '_run')
         ovn.add_port('br-x', 'enp3s0f0')
         self._run.assert_called_once_with(
+            'ovs-vsctl', '--may-exist', 'add-port', 'br-x', 'enp3s0f0')
+        self._run.reset_mock()
+        ifdata = {
+            'type': 'internal',
+            'external-ids': {
+                'iface-id': 'fakeifid',
+                'iface-status': 'active',
+                'attached-mac': 'fakeaddr',
+            },
+        }
+        ovn.add_port('br-x', 'enp3s0f0', ifdata=ifdata)
+        self._run.assert_called_once_with(
+            'ovs-vsctl', '--may-exist', 'add-port', 'br-x', 'enp3s0f0',
+            '--',
+            'set', 'Interface', 'enp3s0f0', 'type=internal',
+            '--',
+            'set', 'Interface', 'enp3s0f0', 'external-ids:iface-id=fakeifid',
+            '--',
+            'set', 'Interface', 'enp3s0f0', 'external-ids:iface-status=active',
+            '--',
+            'set', 'Interface', 'enp3s0f0',
+            'external-ids:attached-mac=fakeaddr')
+        self._run.reset_mock()
+        ovn.add_port('br-x', 'enp3s0f0', exclusive=True)
+        self._run.assert_called_once_with(
             'ovs-vsctl', 'add-port', 'br-x', 'enp3s0f0')
+        self._run.reset_mock()
+        ovn.add_port('br-x', 'enp3s0f0', ifdata=ifdata)
+        self._run.assert_called_once_with(
+            'ovs-vsctl', '--may-exist', 'add-port', 'br-x', 'enp3s0f0',
+            '--',
+            'set', 'Interface', 'enp3s0f0', 'type=internal',
+            '--',
+            'set', 'Interface', 'enp3s0f0', 'external-ids:iface-id=fakeifid',
+            '--',
+            'set', 'Interface', 'enp3s0f0', 'external-ids:iface-status=active',
+            '--',
+            'set', 'Interface', 'enp3s0f0',
+            'external-ids:attached-mac=fakeaddr')
 
     def test_list_ports(self):
         self.patch_object(ovn, '_run')
