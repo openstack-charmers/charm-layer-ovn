@@ -21,7 +21,7 @@ import charms_openstack.bus
 import charms_openstack.charm as charm
 
 
-charms_openstack.bus.discover(os.path.join('lib', 'charms'))
+charms_openstack.bus.discover()
 OVN_CHASSIS_ENABLE_HANDLERS_FLAG = 'charm.ovn.chassis.enable-handlers'
 
 
