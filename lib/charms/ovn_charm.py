@@ -218,7 +218,12 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                     .format(br), level=ch_core.hookenv.DEBUG)
             for port in ifbridges[br]:
                 if port not in ovn.list_ports(br):
-                    ovn.add_port(br, port, ('charm-ovn-chassis', br))
+                    ovn.add_port(br, port, ifdata={
+                        'external-ids': {'charm-ovn-chassis': br}})
+                    # NOTE(fnordahl) This is mostly a workaround for CI, in the
+                    # real world the bare metal provider would most likely have
+                    # configured and brought up the physical port for us.
+                    self.run('ip', 'link', 'set', port, 'up')
                 else:
                     ch_core.hookenv.log('skip adding already existing port '
                                         '"{}" to bridge "{}"'

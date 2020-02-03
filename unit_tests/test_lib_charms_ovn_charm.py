@@ -203,6 +203,7 @@ class TestOVNChassisCharm(Helper):
         self.patch_object(ovn_charm.ovn, 'list_ports')
         self.list_ports().__iter__.return_value = []
         self.patch_object(ovn_charm.ovn, 'add_port')
+        self.patch_target('run')
         self.target.configure_bridges()
         npc.resolve_ports.assert_has_calls([
             mock.call(['00:01:02:03:04:05']),
@@ -220,9 +221,15 @@ class TestOVNChassisCharm(Helper):
         ], any_order=True)
         self.add_port.assert_has_calls([
             mock.call(
-                'br-provider', 'eth0', ('charm-ovn-chassis', 'br-provider')),
+                'br-provider', 'eth0', ifdata={
+                    'external-ids': {'charm-ovn-chassis': 'br-provider'}}),
             mock.call(
-                'br-other', 'eth5', ('charm-ovn-chassis', 'br-other')),
+                'br-other', 'eth5', ifdata={
+                    'external-ids': {'charm-ovn-chassis': 'br-other'}}),
+        ], any_order=True)
+        self.run.assert_has_calls([
+            mock.call('ip', 'link', 'set', 'eth0', 'up'),
+            mock.call('ip', 'link', 'set', 'eth5', 'up'),
         ], any_order=True)
         opvs.set.assert_has_calls([
             mock.call('.', 'external_ids:ovn-bridge-mappings',
