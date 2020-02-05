@@ -161,9 +161,9 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
         # build map of bridge config with existing interfaces on host
         ifbridges = collections.defaultdict(list)
-        config_ifbm = self.config['interface-bridge-mappings'] or ''
+        config_ifbm = self.config['bridge-interface-mappings'] or ''
         for pair in config_ifbm.split():
-            ifname_or_mac, bridge = pair.rsplit(':', 1)
+            bridge, ifname_or_mac = pair.split(':', 1)
             ifbridges[bridge].append(ifname_or_mac)
         for br in ifbridges.keys():
             # resolve mac addresses to interface names
