@@ -182,7 +182,7 @@ class TestOVNChassisCharm(Helper):
         self.NeutronPortContext.return_value = npc
         self.patch_target('config')
         self.config.__getitem__.side_effect = [
-            '00:01:02:03:04:05:br-provider eth5:br-other',
+            'br-provider:00:01:02:03:04:05 br-other:eth5',
             'provider:br-provider other:br-other']
         self.patch_object(ovn_charm.ovn, 'SimpleOVSDB')
         bridges = mock.MagicMock()

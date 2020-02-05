@@ -21,7 +21,7 @@ options:
       Note that updating this setting to a source that is known to
       provide a later version of Ceph will trigger a software
       upgrade.
-  interface-bridge-mappings:
+  bridge-interface-mappings:
     type: string
     default:
     description: >
@@ -43,7 +43,7 @@ options:
       An example value mapping two network interface mac address to two ovs
       bridges would be:
 
-          00:00:5e:00:00:42:br-internet enp3s0f0:br-provider
+          br-internet:00:00:5e:00:00:42 br-provider:enp3s0f0
 
 
       Note: OVN gives you distributed East/West and highly available
@@ -72,7 +72,7 @@ options:
 
       Each charm unit will evaluate each key-value pair and determine if the
       configuration is relevant for the host it is running on based on matches
-      found in the `interface-bridge-mappings` configuration option.
+      found in the `bridge-interface-mappings` configuration option.
 
       If a match is found the bridge will be created if it does not already
       exist, the matched interface will be added to it and the mapping will be
@@ -85,5 +85,5 @@ options:
           physnet1:br-internet physnet2:br-provider
 
       NOTE: Values in this configuration option will only have effect for units
-      that have a interface referenced in the `interface-bridge-mappings`
+      that have a interface referenced in the `bridge-interface-mappings`
       configuration option.

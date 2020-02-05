@@ -54,7 +54,7 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
             'when_any': {
                 'configure_bridges': (
                     'config.changed.ovn-bridge-mappings',
-                    'config.changed.interface-bridge-mappings',
+                    'config.changed.bridge-interface-mappings',
                     'run-default-upgrade-charm',),
             },
         }
