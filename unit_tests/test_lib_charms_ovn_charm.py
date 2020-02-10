@@ -131,7 +131,8 @@ class TestOVNChassisCharm(Helper):
         ovsdb_interface.cluster_local_addr = cluster_local_addr
         self.target.configure_ovs(ovsdb_interface)
         self.run.assert_has_calls([
-            mock.call('ovs-vsctl', 'set-ssl', mock.ANY, mock.ANY, mock.ANY),
+            mock.call('ovs-vsctl', '--no-wait', 'set-ssl',
+                      mock.ANY, mock.ANY, mock.ANY),
             mock.call('ovs-vsctl', 'set', 'open', '.',
                       'external-ids:ovn-encap-type=geneve', '--',
                       'set', 'open', '.',
@@ -150,7 +151,8 @@ class TestOVNChassisCharm(Helper):
         managers.find.assert_called_once_with(
             'target="ptcp:6640:127.0.0.1"')
         self.run.assert_has_calls([
-            mock.call('ovs-vsctl', 'set-ssl', mock.ANY, mock.ANY, mock.ANY),
+            mock.call('ovs-vsctl', '--no-wait', 'set-ssl',
+                      mock.ANY, mock.ANY, mock.ANY),
             mock.call('ovs-vsctl', 'set', 'open', '.',
                       'external-ids:ovn-encap-type=geneve', '--',
                       'set', 'open', '.',

@@ -37,8 +37,7 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'configure_ovs': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'ovsdb.available',
-                    'certificates.available',
-                    'endpoint.certificates.changed'),
+                    'certificates.available'),
                 'disable_openstack': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,),
                 'enable_openstack': (
@@ -49,7 +48,10 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'charm.installed',),
             },
             'when_not': {
-                'disable_openstack': ('nova-compute.connected',),
+                'disable_openstack': ('run-default-update-status',
+                                      'nova-compute.connected',),
+                'enable_openstack': ('run-default-update-status',),
+                'configure_ovs': ('run-default-update-status',),
             },
             'when_any': {
                 'configure_bridges': (
