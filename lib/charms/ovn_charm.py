@@ -117,7 +117,11 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             break
 
     def configure_ovs(self, ovsdb_interface):
+        # NOTE(fnordahl): Due to what is probably a bug in Open vSwitch
+        # subsequent calls to ``ovs-vsctl set-ssl`` will hang indefiniently
+        # Work around this by passing ``--no-wait``.
         self.run('ovs-vsctl',
+                 '--no-wait',
                  'set-ssl',
                  ovn_key(self.adapters_instance),
                  ovn_cert(self.adapters_instance),
@@ -152,7 +156,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                          'create', 'Manager', 'target="{}"'.format(target),
                          '--', 'add', 'Open_vSwitch', '.', 'manager_options',
                          '@manager')
-        self.restart_all()
 
     def configure_bridges(self):
         # we use the resolve_port method of NeutronPortContext to translate

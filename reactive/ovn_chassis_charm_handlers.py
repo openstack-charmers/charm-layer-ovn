@@ -38,11 +38,12 @@ def enable_chassis_reactive_code():
 
 
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG)
-@reactive.when_not('nova-compute.connected')
+@reactive.when_not('run-default-update-status', 'nova-compute.connected')
 def disable_openstack():
     reactive.clear_flag('charm.ovn-chassis.enable-openstack')
 
 
+@reactive.when_not('run-default-update-status')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'nova-compute.connected')
 def enable_openstack():
     reactive.set_flag('charm.ovn-chassis.enable-openstack')
@@ -65,10 +66,10 @@ def configure_bridges():
         charm_instance.assess_status()
 
 
+@reactive.when_not('run-default-update-status')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                'ovsdb.available',
-               'certificates.available',
-               'endpoint.certificates.changed')
+               'certificates.available')
 def configure_ovs():
     ovsdb = reactive.endpoint_from_flag('ovsdb.available')
     with charm.provide_charm_instance() as charm_instance:
@@ -76,6 +77,5 @@ def configure_ovs():
         charm_instance.render_with_interfaces(
             charm.optional_interfaces((ovsdb,),
                                       'nova-compute.connected'))
-        reactive.clear_flag('endpoint.certificates.changed')
         reactive.set_flag('config.rendered')
         charm_instance.assess_status()
