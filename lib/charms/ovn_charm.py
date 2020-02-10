@@ -118,7 +118,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
     def configure_ovs(self, ovsdb_interface):
         # NOTE(fnordahl): Due to what is probably a bug in Open vSwitch
-        # subsequent calls to ``ovs-vsctl set-ssl`` will hang indefiniently
+        # subsequent calls to ``ovs-vsctl set-ssl`` will hang indefinitely
         # Work around this by passing ``--no-wait``.
         self.run('ovs-vsctl',
                  '--no-wait',
