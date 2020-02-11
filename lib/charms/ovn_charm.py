@@ -13,7 +13,6 @@
 # limitations under the License.
 import collections
 import os
-import socket
 import subprocess
 
 import charms.reactive as reactive
@@ -96,6 +95,16 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             universal_newlines=True)
         ch_core.hookenv.log(cp, level=ch_core.hookenv.INFO)
 
+    def get_certificate_request(self):
+        """Override default certificate request handler.
+
+        We make use of OVN RBAC for authorization of writes from chassis nodes
+        to the Southbound DB. The OVSDB server implementation makes use of the
+        CN in the certificate to grant access to individual chassis. The
+        chassis name and CN must match for this to work.
+        """
+        return {self.get_ovs_hostname(): {'sans': None}}
+
     def configure_tls(self, certificates_interface=None):
         """Override default handler prepare certs per OVNs taste."""
         # The default handler in ``OpenStackCharm`` class does the CA only
@@ -116,7 +125,35 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 cn='host')
             break
 
-    def configure_ovs(self, ovsdb_interface):
+    def get_data_ip(self):
+        """Get IP of interface bound to ``data`` binding.
+
+        :returns: IP address
+        :rtype: str
+        """
+        # juju will always return address information, regardless of actual
+        # presence of space binding.
+        #
+        # Unpack ourself as ``network_get_primary_address`` is deprecated
+        return ch_core.hookenv.network_get(
+            'data')['bind-addresses'][0]['addresses'][0]['address']
+
+    def get_ovs_hostname(self):
+        """Get hostname (FQDN) from Open vSwitch.
+
+        :returns: Hostname as configured in Open vSwitch
+        :rtype: str
+        :raises: KeyError
+        """
+        # The Open vSwitch ``ovs-ctl`` script has already done the dirty work
+        # of retrieving the hosts FQDN, use it.
+        #
+        # In the unlikely event of the hostname not being set in the database
+        # we want to error out as this will cause malfunction.
+        for row in ovn.SimpleOVSDB('ovs-vsctl', 'Open_vSwitch'):
+            return row['external_ids']['hostname']
+
+    def configure_ovs(self, sb_conn):
         # NOTE(fnordahl): Due to what is probably a bug in Open vSwitch
         # subsequent calls to ``ovs-vsctl set-ssl`` will hang indefinitely
         # Work around this by passing ``--no-wait``.
@@ -126,22 +163,24 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                  ovn_key(self.adapters_instance),
                  ovn_cert(self.adapters_instance),
                  ovn_ca_cert(self.adapters_instance))
+
+        # The local ``ovn-controller`` process will retrieve information about
+        # how to connect to OVN from the local Open vSwitch database.
         self.run('ovs-vsctl',
                  'set', 'open', '.',
                  'external-ids:ovn-encap-type=geneve', '--',
                  'set', 'open', '.',
                  'external-ids:ovn-encap-ip={}'
-                 .format(ovsdb_interface.cluster_local_addr), '--',
+                 .format(self.get_data_ip()), '--',
                  'set', 'open', '.',
                  'external-ids:system-id={}'
-                 .format(
-                     socket.getfqdn(ovsdb_interface.cluster_local_addr)))
+                 .format(self.get_ovs_hostname()))
         self.run('ovs-vsctl',
                  'set',
                  'open',
                  '.',
                  'external-ids:ovn-remote={}'
-                 .format(','.join(ovsdb_interface.db_sb_connection_strs)))
+                 .format(sb_conn))
         if self.enable_openstack:
             # OpenStack Nova expects the local OVSDB server to listen to
             # TCP port 6640 on localhost.  We use this for the OVN metadata
