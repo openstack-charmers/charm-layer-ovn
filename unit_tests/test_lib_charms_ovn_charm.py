@@ -92,6 +92,13 @@ class TestOVNChassisCharm(Helper):
             check=True,
             universal_newlines=True)
 
+    def test_get_certificate_request(self):
+        self.patch_target('get_ovs_hostname')
+        self.get_ovs_hostname.return_value = 'fake-ovs-hostname'
+        self.assertDictEqual(
+            self.target.get_certificate_request(),
+            {'fake-ovs-hostname': {'sans': []}})
+
     def test_configure_tls(self):
         self.patch_target('get_certs_and_keys')
         self.get_certs_and_keys.return_value = [{
@@ -117,37 +124,61 @@ class TestOVNChassisCharm(Helper):
                 'fakekey',
                 cn='host')
 
+    def test_get_data_ip(self):
+        self.patch_object(ovn_charm.ch_core.hookenv, 'network_get')
+        self.network_get.return_value = {
+            'bind-addresses': [
+                {
+                    'mac-address': 'fa:16:3e:68:e7:dd',
+                    'interface-name': 'ens3',
+                    'addresses': [
+                        {
+                            'hostname': '',
+                            'address': '10.5.0.102',
+                            'cidr': '10.5.0.0/16',
+                        }
+                    ]
+                }
+            ]
+        }
+        self.assertEquals(self.target.get_data_ip(), '10.5.0.102')
+
+    def test_get_ovs_hostname(self):
+        self.patch_object(ovn_charm.ovn, 'SimpleOVSDB')
+        opvs = mock.MagicMock()
+        opvs.__iter__.return_value = [
+            {'external_ids': {'hostname': 'fake-ovs-hostname'}}]
+        self.SimpleOVSDB.return_value = opvs
+        self.assertEquals(self.target.get_ovs_hostname(), 'fake-ovs-hostname')
+
     def test_configure_ovs(self):
         self.patch_target('run')
-        self.patch_target('restart_all')
         self.patch_object(ovn_charm, 'ovn_key')
         self.patch_object(ovn_charm, 'ovn_cert')
         self.patch_object(ovn_charm, 'ovn_ca_cert')
-        ovsdb_interface = mock.MagicMock()
-        db_sb_connection_strs = mock.PropertyMock().return_value = ['dbsbconn']
-        ovsdb_interface.db_sb_connection_strs = db_sb_connection_strs
-        cluster_local_addr = mock.PropertyMock().return_value = (
-            'cluster_local_addr')
-        ovsdb_interface.cluster_local_addr = cluster_local_addr
-        self.target.configure_ovs(ovsdb_interface)
+        self.patch_target('get_data_ip')
+        self.get_data_ip.return_value = 'fake-data-ip'
+        self.patch_target('get_ovs_hostname')
+        self.get_ovs_hostname.return_value = 'fake-ovs-hostname'
+        self.target.configure_ovs('fake-sb-conn-str')
         self.run.assert_has_calls([
             mock.call('ovs-vsctl', '--no-wait', 'set-ssl',
                       mock.ANY, mock.ANY, mock.ANY),
             mock.call('ovs-vsctl', 'set', 'open', '.',
                       'external-ids:ovn-encap-type=geneve', '--',
                       'set', 'open', '.',
-                      'external-ids:ovn-encap-ip=cluster_local_addr', '--',
+                      'external-ids:ovn-encap-ip=fake-data-ip', '--',
                       'set', 'open', '.',
-                      'external-ids:system-id=cluster_local_addr'),
+                      'external-ids:system-id=fake-ovs-hostname'),
             mock.call('ovs-vsctl', 'set', 'open', '.',
-                      'external-ids:ovn-remote=dbsbconn'),
+                      'external-ids:ovn-remote=fake-sb-conn-str'),
         ])
         self.run.reset_mock()
         self.target.enable_openstack = True
         self.patch_object(ovn_charm.ovn, 'SimpleOVSDB')
         managers = mock.MagicMock()
         self.SimpleOVSDB.return_value = managers
-        self.target.configure_ovs(ovsdb_interface)
+        self.target.configure_ovs('fake-sb-conn-str')
         managers.find.assert_called_once_with(
             'target="ptcp:6640:127.0.0.1"')
         self.run.assert_has_calls([
@@ -156,11 +187,11 @@ class TestOVNChassisCharm(Helper):
             mock.call('ovs-vsctl', 'set', 'open', '.',
                       'external-ids:ovn-encap-type=geneve', '--',
                       'set', 'open', '.',
-                      'external-ids:ovn-encap-ip=cluster_local_addr', '--',
+                      'external-ids:ovn-encap-ip=fake-data-ip', '--',
                       'set', 'open', '.',
-                      'external-ids:system-id=cluster_local_addr'),
+                      'external-ids:system-id=fake-ovs-hostname'),
             mock.call('ovs-vsctl', 'set', 'open', '.',
-                      'external-ids:ovn-remote=dbsbconn'),
+                      'external-ids:ovn-remote=fake-sb-conn-str'),
             mock.call('ovs-vsctl', '--id', '@manager',
                       'create', 'Manager', 'target="ptcp:6640:127.0.0.1"',
                       '--', 'add', 'Open_vSwitch', '.', 'manager_options',
