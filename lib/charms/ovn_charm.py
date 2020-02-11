@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import collections
+import ipaddress
 import os
 import subprocess
 
@@ -125,6 +126,23 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 cn='host')
             break
 
+    @staticmethod
+    def _format_addr(addr):
+        """Validate and format IP address
+
+        :param addr: IPv6 or IPv4 address
+        :type addr: str
+        :returns: Address string, optionally encapsulated in brackets ([])
+        :rtype: str
+        :raises: ValueError
+        """
+        ipaddr = ipaddress.ip_address(addr)
+        if isinstance(ipaddr, ipaddress.IPv6Address):
+            fmt = '[{}]'
+        else:
+            fmt = '{}'
+        return fmt.format(ipaddr)
+
     def get_data_ip(self):
         """Get IP of interface bound to ``data`` binding.
 
@@ -135,10 +153,12 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         # presence of space binding.
         #
         # Unpack ourself as ``network_get_primary_address`` is deprecated
-        return ch_core.hookenv.network_get(
-            'data')['bind-addresses'][0]['addresses'][0]['address']
+        return self._format_addr(
+            ch_core.hookenv.network_get(
+                'data')['bind-addresses'][0]['addresses'][0]['address'])
 
-    def get_ovs_hostname(self):
+    @staticmethod
+    def get_ovs_hostname():
         """Get hostname (FQDN) from Open vSwitch.
 
         :returns: Hostname as configured in Open vSwitch

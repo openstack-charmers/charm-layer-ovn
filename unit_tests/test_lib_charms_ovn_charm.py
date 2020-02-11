@@ -124,6 +124,15 @@ class TestOVNChassisCharm(Helper):
                 'fakekey',
                 cn='host')
 
+    def test__format_addr(self):
+        self.assertEquals('1.2.3.4', self.target._format_addr('1.2.3.4'))
+        self.assertEquals(
+            '[2001:db8::42]', self.target._format_addr('2001:db8::42'))
+        with self.assertRaises(ValueError):
+            self.target._format_addr('999.999.999.999')
+        with self.assertRaises(ValueError):
+            self.target._format_addr('2001:db8::g')
+
     def test_get_data_ip(self):
         self.patch_object(ovn_charm.ch_core.hookenv, 'network_get')
         self.network_get.return_value = {
