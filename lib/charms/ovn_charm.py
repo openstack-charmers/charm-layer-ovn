@@ -103,7 +103,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         CN in the certificate to grant access to individual chassis. The
         chassis name and CN must match for this to work.
         """
-        return {self.get_ovs_hostname(): {'sans': None}}
+        return {self.get_ovs_hostname(): {'sans': []}}
 
     def configure_tls(self, certificates_interface=None):
         """Override default handler prepare certs per OVNs taste."""

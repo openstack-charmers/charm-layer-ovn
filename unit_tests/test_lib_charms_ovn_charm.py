@@ -97,7 +97,7 @@ class TestOVNChassisCharm(Helper):
         self.get_ovs_hostname.return_value = 'fake-ovs-hostname'
         self.assertDictEqual(
             self.target.get_certificate_request(),
-            {'fake-ovs-hostname': {'sans': None}})
+            {'fake-ovs-hostname': {'sans': []}})
 
     def test_configure_tls(self):
         self.patch_target('get_certs_and_keys')
