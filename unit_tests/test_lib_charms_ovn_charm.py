@@ -73,7 +73,7 @@ class Helper(test_utils.PatchHelper):
 
 class TestOVNChassisCharm(Helper):
 
-    def test_optional_openstack_metadata(self):
+    def test_optional_openstack_metadata_train(self):
         self.assertEquals(self.target.packages, ['ovn-host'])
         self.assertEquals(self.target.services, ['ovn-host'])
         self.patch_object(
@@ -81,12 +81,32 @@ class TestOVNChassisCharm(Helper):
         self._custom_config_properties.side_effect = {}
         self.patch_object(ovn_charm.reactive, 'is_flag_set',
                           return_value=True)
-        c = ovn_charm.BaseOVNChassisCharm()
+        c = ovn_charm.BaseTrainOVNChassisCharm()
         self.assertEquals(c.packages, [
             'ovn-host', 'networking-ovn-metadata-agent', 'haproxy'
         ])
         self.assertEquals(c.services, [
             'ovn-host', 'networking-ovn-metadata-agent'])
+
+    def test_optional_openstack_metadata_ussuri(self):
+        self.assertEquals(self.target.packages, ['ovn-host'])
+        self.assertEquals(self.target.services, ['ovn-host'])
+        self.patch_object(
+            ovn_charm.charms_openstack.adapters, '_custom_config_properties')
+        self._custom_config_properties.side_effect = {}
+        self.patch_object(ovn_charm.reactive, 'is_flag_set',
+                          return_value=True)
+        c = ovn_charm.BaseUssuriOVNChassisCharm()
+        self.assertEquals(c.packages, [
+            'ovn-host', 'python3-neutron', 'haproxy'
+        ])
+        self.assertEquals(c.services, [
+            'ovn-host', 'neutron-ovn-metadata-agent'])
+        self.assertDictEqual(c.restart_map, {
+            '/etc/init.d/neutron-ovn-metadata-agent': [],
+            '/etc/neutron/neutron_ovn_metadata_agent.ini': [
+                'neutron-ovn-metadata-agent'],
+            '/etc/systemd/system/neutron-ovn-metadata-agent.service': []})
 
     def test_run(self):
         self.patch_object(ovn_charm.subprocess, 'run')
