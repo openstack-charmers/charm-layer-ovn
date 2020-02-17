@@ -27,22 +27,19 @@ import charms_openstack.charm
 import charms.ovn as ovn
 
 
-OVS_ETCDIR = '/etc/openvswitch'
-
-
 # NOTE: Do not use ``config_property`` decorator here as it will break when
 # module is imported multiple times.  Add calls to ``config_property`` to your
 # class initializer referencing these helpers instead.
 def ovn_key(cls):
-    return os.path.join(OVS_ETCDIR, 'key_host')
+    return os.path.join(ovn.ovn_sysconfdir(), 'key_host')
 
 
 def ovn_cert(cls):
-    return os.path.join(OVS_ETCDIR, 'cert_host')
+    return os.path.join(ovn.ovn_sysconfdir(), 'cert_host')
 
 
 def ovn_ca_cert(cls):
-    return os.path.join(OVS_ETCDIR,
+    return os.path.join(ovn.ovn_sysconfdir(),
                         '{}.crt'.format(cls.charm_instance.name))
 
 
@@ -120,7 +117,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 else:
                     crt.write(tls_object['ca'])
 
-            self.configure_cert(OVS_ETCDIR,
+            self.configure_cert(ovn.ovn_sysconfdir(),
                                 tls_object['cert'],
                                 tls_object['key'],
                                 cn='host')

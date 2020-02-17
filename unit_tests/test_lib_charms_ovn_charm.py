@@ -14,7 +14,6 @@
 
 import io
 import mock
-import os
 
 import charms_openstack.test_utils as test_utils
 
@@ -23,19 +22,23 @@ import charms.ovn_charm as ovn_charm
 
 class TestOVNConfigProperties(test_utils.PatchHelper):
 
+    def setUp(self):
+        super().setUp()
+        self.patch_object(ovn_charm.ovn, 'ovn_rundir')
+        self.ovn_rundir.return_value = '/var/path'
+        self.patch_object(ovn_charm.ovn, 'ovn_sysconfdir')
+        self.ovn_sysconfdir.return_value = '/etc/path'
+
     def test_ovn_key(self):
-        self.assertEquals(ovn_charm.ovn_key(None),
-                          os.path.join(ovn_charm.OVS_ETCDIR, 'key_host'))
+        self.assertEquals(ovn_charm.ovn_key(None), '/etc/path/key_host')
 
     def test_ovn_cert(self):
-        self.assertEquals(ovn_charm.ovn_cert(None),
-                          os.path.join(ovn_charm.OVS_ETCDIR, 'cert_host'))
+        self.assertEquals(ovn_charm.ovn_cert(None), '/etc/path/cert_host')
 
     def test_ovn_ca_cert(self):
         cls = mock.MagicMock()
         cls.charm_instance.name = mock.PropertyMock().return_value = 'name'
-        self.assertEquals(ovn_charm.ovn_ca_cert(cls),
-                          os.path.join(ovn_charm.OVS_ETCDIR, 'name.crt'))
+        self.assertEquals(ovn_charm.ovn_ca_cert(cls), '/etc/path/name.crt')
 
 
 class Helper(test_utils.PatchHelper):
@@ -48,6 +51,10 @@ class Helper(test_utils.PatchHelper):
         self.patch_object(
             ovn_charm.charms_openstack.adapters, '_custom_config_properties')
         self._custom_config_properties.side_effect = {}
+        self.patch_object(ovn_charm.ovn, 'ovn_rundir')
+        self.ovn_rundir.return_value = '/var/path'
+        self.patch_object(ovn_charm.ovn, 'ovn_sysconfdir')
+        self.ovn_sysconfdir.return_value = '/etc/path'
         self.target = ovn_charm.BaseOVNChassisCharm()
         # remove the 'is_flag_set' patch so the tests can use it
         self._patches['is_flag_set'].stop()
@@ -115,11 +122,11 @@ class TestOVNChassisCharm(Helper):
             self.target.run = mock.MagicMock()
             self.target.configure_tls()
             mocked_open.assert_called_once_with(
-                '/etc/openvswitch/charmname.crt', 'w')
+                '/etc/path/charmname.crt', 'w')
             mocked_file.__enter__().write.assert_called_once_with(
                 'fakeca\nfakechain')
             self.target.configure_cert.assert_called_once_with(
-                ovn_charm.OVS_ETCDIR,
+                '/etc/path',
                 'fakecert',
                 'fakekey',
                 cn='host')
