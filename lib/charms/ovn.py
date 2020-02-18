@@ -17,9 +17,6 @@ import subprocess
 import uuid
 
 
-OVS_RUNDIR = '/var/run/openvswitch'
-
-
 def _run(*args):
     """Run a process, check result, capture decoded output from STDERR/STDOUT.
 
@@ -34,6 +31,44 @@ def _run(*args):
         universal_newlines=True)
 
 
+def ovn_rundir():
+    """Determine path to OVN sockets.
+
+    Prior to OVN 20.03 the default placement of OVN sockets was together with
+    Open vSwitch, from 20.03 and onwards they are kept in a separate directory.
+
+    :returns: path to OVN rundir
+    :rtype: str
+    """
+    OVN_RUNDIR = '/var/run/ovn'
+    OVS_RUNDIR = '/var/run/openvswitch'
+    for rundir in OVN_RUNDIR, OVS_RUNDIR:
+        if os.path.exists(rundir):
+            return (rundir)
+    # Fall back to new default
+    return OVN_RUNDIR
+
+
+def ovn_sysconfdir():
+    """Determine path to OVN configuration.
+
+    Prior to OVN 20.03 the default placement of OVN configuration was together
+    with Open vSwitch, from 20.03 and onwards they are kept in a separate
+    directory.
+
+    :returns: path to OVN sysconfdir
+    :rtype: str
+    """
+    OVN_SYSCONFDIR = '/etc/ovn'
+    OVS_SYSCONFDIR = '/etc/openvswitch'
+    for sysconfdir in OVN_SYSCONFDIR, OVS_SYSCONFDIR:
+        if os.path.exists(sysconfdir):
+            return (sysconfdir)
+    # Fall back to new default
+    return OVN_SYSCONFDIR
+
+
+# TODO: Make use of the new `ovn-appctl` if/when that makes sense
 def ovs_appctl(target, *args):
     """Run `ovs-appctl` for target with args and return output.
 
@@ -51,7 +86,7 @@ def ovs_appctl(target, *args):
     # non-standard naming scheme for their daemon control socket and we need
     # to pass the full path to the socket.
     if target in ('ovnnb_db', 'ovnsb_db',):
-        target = os.path.join(OVS_RUNDIR, target + '.ctl')
+        target = os.path.join(ovn_rundir(), target + '.ctl')
     return _run('ovs-appctl', '-t', target, *args).stdout
 
 

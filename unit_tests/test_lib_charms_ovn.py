@@ -53,8 +53,28 @@ class TestOVSDB(test_utils.PatchHelper):
             ('aArg',), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             check=True, universal_newlines=True)
 
+    def test_ovn_rundir(self):
+        self.patch_object(ovn.os.path, 'exists')
+        self.exists.side_effect = [False, False]
+        self.assertEquals(ovn.ovn_rundir(), '/var/run/ovn')
+        self.exists.side_effect = [False, True]
+        self.assertEquals(ovn.ovn_rundir(), '/var/run/openvswitch')
+        self.exists.side_effect = [True]
+        self.assertEquals(ovn.ovn_rundir(), '/var/run/ovn')
+
+    def test_ovn_sysconfdir(self):
+        self.patch_object(ovn.os.path, 'exists')
+        self.exists.side_effect = [False, False]
+        self.assertEquals(ovn.ovn_sysconfdir(), '/etc/ovn')
+        self.exists.side_effect = [False, True]
+        self.assertEquals(ovn.ovn_sysconfdir(), '/etc/openvswitch')
+        self.exists.side_effect = [True]
+        self.assertEquals(ovn.ovn_sysconfdir(), '/etc/ovn')
+
     def test_ovs_appctl(self):
         self.patch_object(ovn, '_run')
+        self.patch_object(ovn, 'ovn_rundir')
+        self.ovn_rundir.return_value = '/var/run/openvswitch'
         ovn.ovs_appctl('ovn-northd', 'is-paused')
         self._run.assert_called_once_with('ovs-appctl', '-t', 'ovn-northd',
                                           'is-paused')

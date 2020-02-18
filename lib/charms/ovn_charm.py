@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import collections
+import ipaddress
 import os
 import subprocess
 
@@ -26,22 +27,19 @@ import charms_openstack.charm
 import charms.ovn as ovn
 
 
-OVS_ETCDIR = '/etc/openvswitch'
-
-
 # NOTE: Do not use ``config_property`` decorator here as it will break when
 # module is imported multiple times.  Add calls to ``config_property`` to your
 # class initializer referencing these helpers instead.
 def ovn_key(cls):
-    return os.path.join(OVS_ETCDIR, 'key_host')
+    return os.path.join(ovn.ovn_sysconfdir(), 'key_host')
 
 
 def ovn_cert(cls):
-    return os.path.join(OVS_ETCDIR, 'cert_host')
+    return os.path.join(ovn.ovn_sysconfdir(), 'cert_host')
 
 
 def ovn_ca_cert(cls):
-    return os.path.join(OVS_ETCDIR,
+    return os.path.join(ovn.ovn_sysconfdir(),
                         '{}.crt'.format(cls.charm_instance.name))
 
 
@@ -64,9 +62,11 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     abstract_class = True
     package_codenames = {
         'ovn-host': collections.OrderedDict([
-            ('2.12', 'train'),
+            ('2', 'train'),
+            ('20', 'ussuri'),
         ]),
     }
+    release_pkg = 'ovn-host'
     packages = ['ovn-host']
     services = ['ovn-host']
     adapters_class = OVNChassisCharmRelationAdapters
@@ -75,19 +75,16 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     enable_openstack = False
 
     def __init__(self, **kwargs):
-        charms_openstack.adapters.config_property(ovn_key)
-        charms_openstack.adapters.config_property(ovn_cert)
-        charms_openstack.adapters.config_property(ovn_ca_cert)
+        super().__init__(**kwargs)
+        try:
+            charms_openstack.adapters.config_property(ovn_key)
+            charms_openstack.adapters.config_property(ovn_cert)
+            charms_openstack.adapters.config_property(ovn_ca_cert)
+        except RuntimeError:
+            # The custom config properties have already been registered
+            pass
         if reactive.is_flag_set('charm.ovn-chassis.enable-openstack'):
             self.enable_openstack = True
-            metadata_agent = 'networking-ovn-metadata-agent'
-            self.packages.extend(['networking-ovn-metadata-agent', 'haproxy'])
-            self.services.append(metadata_agent)
-            self.restart_map.update({
-                '/etc/neutron/'
-                'networking_ovn_metadata_agent.ini': [metadata_agent],
-            })
-        super().__init__(**kwargs)
 
     def run(self, *args):
         cp = subprocess.run(
@@ -119,11 +116,28 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 else:
                     crt.write(tls_object['ca'])
 
-            self.configure_cert(OVS_ETCDIR,
+            self.configure_cert(ovn.ovn_sysconfdir(),
                                 tls_object['cert'],
                                 tls_object['key'],
                                 cn='host')
             break
+
+    @staticmethod
+    def _format_addr(addr):
+        """Validate and format IP address
+
+        :param addr: IPv6 or IPv4 address
+        :type addr: str
+        :returns: Address string, optionally encapsulated in brackets ([])
+        :rtype: str
+        :raises: ValueError
+        """
+        ipaddr = ipaddress.ip_address(addr)
+        if isinstance(ipaddr, ipaddress.IPv6Address):
+            fmt = '[{}]'
+        else:
+            fmt = '{}'
+        return fmt.format(ipaddr)
 
     def get_data_ip(self):
         """Get IP of interface bound to ``data`` binding.
@@ -135,10 +149,12 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         # presence of space binding.
         #
         # Unpack ourself as ``network_get_primary_address`` is deprecated
-        return ch_core.hookenv.network_get(
-            'data')['bind-addresses'][0]['addresses'][0]['address']
+        return self._format_addr(
+            ch_core.hookenv.network_get(
+                'data')['bind-addresses'][0]['addresses'][0]['address'])
 
-    def get_ovs_hostname(self):
+    @staticmethod
+    def get_ovs_hostname():
         """Get hostname (FQDN) from Open vSwitch.
 
         :returns: Hostname as configured in Open vSwitch
@@ -282,3 +298,39 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             opvs.remove('.', 'external_ids', 'ovn-bridge-mappings')
             # NOTE(fnordahl): Workaround for LP: #1848757
             opvs.remove('.', 'external_ids', 'ovn-cms-options')
+
+
+class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
+    abstract_class = True
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.enable_openstack:
+            metadata_agent = 'networking-ovn-metadata-agent'
+            self.packages.extend(['networking-ovn-metadata-agent', 'haproxy'])
+            self.services.append(metadata_agent)
+            self.restart_map.update({
+                '/etc/neutron/'
+                'networking_ovn_metadata_agent.ini': [metadata_agent],
+            })
+
+
+class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
+    abstract_class = True
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.enable_openstack:
+            metadata_agent = 'neutron-ovn-metadata-agent'
+            # TODO: replace with ussuri ``neutron-ovn-metadata-agent`` pkg
+            self.packages.extend(['python3-neutron', 'haproxy'])
+            self.services.append(metadata_agent)
+            self.restart_map.update({
+                '/etc/init.d/neutron-ovn-metadata-agent': [],
+                '/etc/systemd/system/neutron-ovn-metadata-agent.service': [],
+                '/etc/neutron/neutron_ovn_metadata_agent.ini': [
+                    metadata_agent],
+            })
+            self.permission_override_map.update({
+                '/etc/init.d/neutron-ovn-metadata-agent': 0o755,
+            })
