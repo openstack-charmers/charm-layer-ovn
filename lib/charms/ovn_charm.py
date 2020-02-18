@@ -305,7 +305,6 @@ class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        print('welcome to Train')
         if self.enable_openstack:
             metadata_agent = 'networking-ovn-metadata-agent'
             self.packages.extend(['networking-ovn-metadata-agent', 'haproxy'])
@@ -321,7 +320,6 @@ class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        print('welcome to Ussuri')
         if self.enable_openstack:
             metadata_agent = 'neutron-ovn-metadata-agent'
             # TODO: replace with ussuri ``neutron-ovn-metadata-agent`` pkg
