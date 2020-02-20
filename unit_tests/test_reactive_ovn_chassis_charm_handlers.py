@@ -26,6 +26,7 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
             'charm.installed',
             'config.changed',
             'config.rendered',
+            'charm.default-select-release',
             'update-status',
             'upgrade-charm',
             'certificates.available',
