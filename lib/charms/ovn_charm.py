@@ -322,15 +322,9 @@ class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
         super().__init__(**kwargs)
         if self.enable_openstack:
             metadata_agent = 'neutron-ovn-metadata-agent'
-            # TODO: replace with ussuri ``neutron-ovn-metadata-agent`` pkg
-            self.packages.extend(['python3-neutron', 'haproxy'])
+            self.packages.extend([metadata_agent])
             self.services.append(metadata_agent)
             self.restart_map.update({
-                '/etc/init.d/neutron-ovn-metadata-agent': [],
-                '/etc/systemd/system/neutron-ovn-metadata-agent.service': [],
                 '/etc/neutron/neutron_ovn_metadata_agent.ini': [
                     metadata_agent],
-            })
-            self.permission_override_map.update({
-                '/etc/init.d/neutron-ovn-metadata-agent': 0o755,
             })
