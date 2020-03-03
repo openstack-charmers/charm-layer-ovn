@@ -98,15 +98,14 @@ class TestOVNChassisCharm(Helper):
                           return_value=True)
         c = ovn_charm.BaseUssuriOVNChassisCharm()
         self.assertEquals(c.packages, [
-            'ovn-host', 'python3-neutron', 'haproxy'
+            'ovn-host', 'neutron-ovn-metadata-agent'
         ])
         self.assertEquals(c.services, [
             'ovn-host', 'neutron-ovn-metadata-agent'])
         self.assertDictEqual(c.restart_map, {
-            '/etc/init.d/neutron-ovn-metadata-agent': [],
             '/etc/neutron/neutron_ovn_metadata_agent.ini': [
                 'neutron-ovn-metadata-agent'],
-            '/etc/systemd/system/neutron-ovn-metadata-agent.service': []})
+        })
 
     def test_run(self):
         self.patch_object(ovn_charm.subprocess, 'run')
