@@ -67,8 +67,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         ]),
     }
     release_pkg = 'ovn-host'
-    packages = ['ovn-host']
-    services = ['ovn-host']
     adapters_class = OVNChassisCharmRelationAdapters
     required_relations = ['certificates', 'ovsdb']
     python_version = 3
@@ -76,6 +74,11 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # NOTE: we must initialize the packages and services variables as
+        # instance variables as we are extending them in the release
+        # specialized class instances and can not rely on class variables.
+        self.packages = ['ovn-host']
+        self.services = ['ovn-host']
         try:
             charms_openstack.adapters.config_property(ovn_key)
             charms_openstack.adapters.config_property(ovn_cert)
