@@ -43,9 +43,9 @@ class TestOVNConfigProperties(test_utils.PatchHelper):
 
 class Helper(test_utils.PatchHelper):
 
-    def setUp(self):
+    def setUp(self, release=None):
         super().setUp()
-        self.patch_release(ovn_charm.BaseOVNChassisCharm.release)
+        self.patch_release(release or 'train')
         self.patch_object(ovn_charm.reactive, 'is_flag_set',
                           return_value=False)
         self.patch_object(
@@ -71,7 +71,7 @@ class Helper(test_utils.PatchHelper):
         setattr(self, attr, started)
 
 
-class TestOVNChassisCharm(Helper):
+class TestTrainOVNChassisCharm(Helper):
 
     def test_optional_openstack_metadata_train(self):
         self.assertEquals(self.target.packages, ['ovn-host'])
@@ -87,6 +87,12 @@ class TestOVNChassisCharm(Helper):
         ])
         self.assertEquals(c.services, [
             'ovn-host', 'networking-ovn-metadata-agent'])
+
+
+class TestUssuriOVNChassisCharm(Helper):
+
+    def setUp(self):
+        super().setUp(release='ussuri')
 
     def test_optional_openstack_metadata_ussuri(self):
         self.assertEquals(self.target.packages, ['ovn-host'])
@@ -106,6 +112,9 @@ class TestOVNChassisCharm(Helper):
             '/etc/neutron/neutron_ovn_metadata_agent.ini': [
                 'neutron-ovn-metadata-agent'],
         })
+
+
+class TestOVNChassisCharm(Helper):
 
     def test_run(self):
         self.patch_object(ovn_charm.subprocess, 'run')
