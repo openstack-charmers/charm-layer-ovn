@@ -27,24 +27,27 @@ import charms_openstack.charm
 import charms.ovn as ovn
 
 
-# NOTE: Do not use ``config_property`` decorator here as it will break when
-# module is imported multiple times.  Add calls to ``config_property`` to your
-# class initializer referencing these helpers instead.
-def ovn_key(cls):
-    return os.path.join(ovn.ovn_sysconfdir(), 'key_host')
+class OVNConfigurationAdapter(
+        charms_openstack.adapters.ConfigurationAdapter):
+    """Configuration adapter for OVN."""
 
+    @property
+    def ovn_key(self):
+        return os.path.join(self.charm_instance.ovn_sysconfdir(), 'key_host')
 
-def ovn_cert(cls):
-    return os.path.join(ovn.ovn_sysconfdir(), 'cert_host')
+    @property
+    def ovn_cert(self):
+        return os.path.join(self.charm_instance.ovn_sysconfdir(), 'cert_host')
 
-
-def ovn_ca_cert(cls):
-    return os.path.join(ovn.ovn_sysconfdir(),
-                        '{}.crt'.format(cls.charm_instance.name))
+    @property
+    def ovn_ca_cert(self):
+        return os.path.join(self.charm_instance.ovn_sysconfdir(),
+                            '{}.crt'.format(self.charm_instance.name))
 
 
 class NeutronPluginRelationAdapter(
         charms_openstack.adapters.OpenStackRelationAdapter):
+    """Relation adapter for neutron-plugin interface."""
 
     @property
     def metadata_shared_secret(self):
@@ -53,12 +56,15 @@ class NeutronPluginRelationAdapter(
 
 class OVNChassisCharmRelationAdapters(
         charms_openstack.adapters.OpenStackRelationAdapters):
+    """Provide dictionary of relation adapters for use by OVN Chassis charms.
+    """
     relation_adapters = {
         'nova_compute': NeutronPluginRelationAdapter,
     }
 
 
 class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
+    """Base class for the OVN Chassis charms."""
     abstract_class = True
     package_codenames = {
         'ovn-host': collections.OrderedDict([
@@ -68,28 +74,36 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     }
     release_pkg = 'ovn-host'
     adapters_class = OVNChassisCharmRelationAdapters
+    configuration_class = OVNConfigurationAdapter
     required_relations = ['certificates', 'ovsdb']
     python_version = 3
     enable_openstack = False
 
     def __init__(self, **kwargs):
+        """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
         # NOTE: we must initialize the packages and services variables as
         # instance variables as we are extending them in the release
         # specialized class instances and can not rely on class variables.
         self.packages = ['ovn-host']
         self.services = ['ovn-host']
-        try:
-            charms_openstack.adapters.config_property(ovn_key)
-            charms_openstack.adapters.config_property(ovn_cert)
-            charms_openstack.adapters.config_property(ovn_ca_cert)
-        except RuntimeError:
-            # The custom config properties have already been registered
-            pass
         if reactive.is_flag_set('charm.ovn-chassis.enable-openstack'):
             self.enable_openstack = True
 
+    @staticmethod
+    def ovn_sysconfdir():
+        """Provide path to OVN system configuration."""
+        return '/etc/ovn'
+
     def run(self, *args):
+        """Run external process and return result.
+
+        :param *args: Command name and arguments.
+        :type *args: str
+        :returns: Data about completed process
+        :rtype: subprocess.CompletedProcess
+        :raises: subprocess.CalledProcessError
+        """
         cp = subprocess.run(
             args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True,
             universal_newlines=True)
@@ -106,20 +120,24 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         return {self.get_ovs_hostname(): {'sans': []}}
 
     def configure_tls(self, certificates_interface=None):
-        """Override default handler prepare certs per OVNs taste."""
+        """Override default handler prepare certs per OVNs taste.
+
+        :param certificates_interface: A certificates relation
+        :type certificates_interface: Optional[TlsRequires(reactive.Endpoint)]
+        """
         # The default handler in ``OpenStackCharm`` class does the CA only
         tls_objects = self.get_certs_and_keys(
             certificates_interface=certificates_interface)
 
         for tls_object in tls_objects:
-            with open(ovn_ca_cert(self.adapters_instance), 'w') as crt:
+            with open(self.options.ovn_ca_cert, 'w') as crt:
                 chain = tls_object.get('chain')
                 if chain:
                     crt.write(tls_object['ca'] + os.linesep + chain)
                 else:
                     crt.write(tls_object['ca'])
 
-            self.configure_cert(ovn.ovn_sysconfdir(),
+            self.configure_cert(self.ovn_sysconfdir(),
                                 tls_object['cert'],
                                 tls_object['key'],
                                 cn='host')
@@ -173,15 +191,20 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             return row['external_ids']['hostname']
 
     def configure_ovs(self, sb_conn):
+        """Global Open vSwitch configuration tasks.
+
+        :param sb_conn: Comma separated string of OVSDB connection methods.
+        :type sb_conn: str
+        """
         # NOTE(fnordahl): Due to what is probably a bug in Open vSwitch
         # subsequent calls to ``ovs-vsctl set-ssl`` will hang indefinitely
         # Work around this by passing ``--no-wait``.
         self.run('ovs-vsctl',
                  '--no-wait',
                  'set-ssl',
-                 ovn_key(self.adapters_instance),
-                 ovn_cert(self.adapters_instance),
-                 ovn_ca_cert(self.adapters_instance))
+                 self.options.ovn_key,
+                 self.options.ovn_cert,
+                 self.options.ovn_ca_cert)
 
         # The local ``ovn-controller`` process will retrieve information about
         # how to connect to OVN from the local Open vSwitch database.
@@ -216,6 +239,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                          '@manager')
 
     def configure_bridges(self):
+        """Configure Open vSwitch bridges ports and interfaces."""
         # we use the resolve_port method of NeutronPortContext to translate
         # MAC addresses into interface names
         npc = os_context.NeutronPortContext()
@@ -304,9 +328,15 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
 
 class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
+    """Train incarnation of the OVN Chassis base charm class."""
     abstract_class = True
 
+    @staticmethod
+    def ovn_sysconfdir():
+        return '/etc/openvswitch'
+
     def __init__(self, **kwargs):
+        """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
         if self.enable_openstack:
             metadata_agent = 'networking-ovn-metadata-agent'
@@ -319,9 +349,11 @@ class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
 
 
 class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
+    """Ussuri incarnation of the OVN Chassis base charm class."""
     abstract_class = True
 
     def __init__(self, **kwargs):
+        """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
         if self.enable_openstack:
             metadata_agent = 'neutron-ovn-metadata-agent'

@@ -15,39 +15,39 @@
 import io
 import mock
 
+import charms_openstack.charm.core as chm_core
 import charms_openstack.test_utils as test_utils
 
 import charms.ovn_charm as ovn_charm
 
 
-class TestOVNConfigProperties(test_utils.PatchHelper):
+class TestOVNConfigurationAdapter(test_utils.PatchHelper):
 
     def setUp(self):
         super().setUp()
-        self.patch_object(ovn_charm.ovn, 'ovn_rundir')
-        self.ovn_rundir.return_value = '/var/path'
-        self.patch_object(ovn_charm.ovn, 'ovn_sysconfdir')
-        self.ovn_sysconfdir.return_value = '/etc/path'
+        self.charm_instance = mock.MagicMock()
+        self.charm_instance.ovn_sysconfdir.return_value = '/etc/path'
+        self.target = ovn_charm.OVNConfigurationAdapter(
+            charm_instance=self.charm_instance)
 
     def test_ovn_key(self):
-        self.assertEquals(ovn_charm.ovn_key(None), '/etc/path/key_host')
+        self.assertEquals(self.target.ovn_key, '/etc/path/key_host')
 
     def test_ovn_cert(self):
-        self.assertEquals(ovn_charm.ovn_cert(None), '/etc/path/cert_host')
+        self.assertEquals(self.target.ovn_cert, '/etc/path/cert_host')
 
     def test_ovn_ca_cert(self):
-        cls = mock.MagicMock()
-        cls.charm_instance.name = mock.PropertyMock().return_value = 'name'
-        self.assertEquals(ovn_charm.ovn_ca_cert(cls), '/etc/path/name.crt')
+        self.charm_instance.name = mock.PropertyMock().return_value = 'name'
+        self.assertEquals(self.target.ovn_ca_cert, '/etc/path/name.crt')
 
 
 class Helper(test_utils.PatchHelper):
 
-    def setUp(self, release=None):
+    def setUp(self, release=None, is_flag_set_return_value=False):
         super().setUp()
-        self.patch_release(release or 'train')
+        self.patch_release(release or 'ussuri')
         self.patch_object(ovn_charm.reactive, 'is_flag_set',
-                          return_value=False)
+                          return_value=is_flag_set_return_value)
         self.patch_object(
             ovn_charm.charms_openstack.adapters, '_custom_config_properties')
         self._custom_config_properties.side_effect = {}
@@ -55,12 +55,22 @@ class Helper(test_utils.PatchHelper):
         self.ovn_rundir.return_value = '/var/path'
         self.patch_object(ovn_charm.ovn, 'ovn_sysconfdir')
         self.ovn_sysconfdir.return_value = '/etc/path'
-        self.target = ovn_charm.BaseOVNChassisCharm()
+        if release and release == 'train':
+            self.target = ovn_charm.BaseTrainOVNChassisCharm()
+        else:
+            self.target = ovn_charm.BaseUssuriOVNChassisCharm()
         # remove the 'is_flag_set' patch so the tests can use it
         self._patches['is_flag_set'].stop()
         setattr(self, 'is_flag_set', None)
         del(self._patches['is_flag_set'])
         del(self._patches_start['is_flag_set'])
+
+    def tearDown(self):
+        super().tearDown()
+        chm_core._release_selector_function = None
+        chm_core._package_type_selector_function = None
+        chm_core._releases = None
+        chm_core._singleton = None
 
     def patch_target(self, attr, return_value=None):
         mocked = mock.patch.object(self.target, attr)
@@ -73,48 +83,39 @@ class Helper(test_utils.PatchHelper):
 
 class TestTrainOVNChassisCharm(Helper):
 
+    def setUp(self):
+        super().setUp(release='train', is_flag_set_return_value=True)
+
     def test_optional_openstack_metadata_train(self):
-        self.assertEquals(self.target.packages, ['ovn-host'])
-        self.assertEquals(self.target.services, ['ovn-host'])
-        self.patch_object(
-            ovn_charm.charms_openstack.adapters, '_custom_config_properties')
-        self._custom_config_properties.side_effect = {}
-        self.patch_object(ovn_charm.reactive, 'is_flag_set',
-                          return_value=True)
-        c = ovn_charm.BaseTrainOVNChassisCharm()
-        self.assertEquals(c.packages, [
+        self.assertEquals(self.target.packages, [
             'ovn-host', 'networking-ovn-metadata-agent', 'haproxy'
         ])
-        self.assertEquals(c.services, [
+        self.assertEquals(self.target.services, [
             'ovn-host', 'networking-ovn-metadata-agent'])
 
 
 class TestUssuriOVNChassisCharm(Helper):
 
     def setUp(self):
-        super().setUp(release='ussuri')
+        super().setUp(is_flag_set_return_value=True)
 
     def test_optional_openstack_metadata_ussuri(self):
-        self.assertEquals(self.target.packages, ['ovn-host'])
-        self.assertEquals(self.target.services, ['ovn-host'])
-        self.patch_object(
-            ovn_charm.charms_openstack.adapters, '_custom_config_properties')
-        self._custom_config_properties.side_effect = {}
-        self.patch_object(ovn_charm.reactive, 'is_flag_set',
-                          return_value=True)
-        c = ovn_charm.BaseUssuriOVNChassisCharm()
-        self.assertEquals(c.packages, [
+        self.assertEquals(self.target.packages, [
             'ovn-host', 'neutron-ovn-metadata-agent'
         ])
-        self.assertEquals(c.services, [
+        self.assertEquals(self.target.services, [
             'ovn-host', 'neutron-ovn-metadata-agent'])
-        self.assertDictEqual(c.restart_map, {
+        self.assertDictEqual(self.target.restart_map, {
             '/etc/neutron/neutron_ovn_metadata_agent.ini': [
                 'neutron-ovn-metadata-agent'],
         })
 
 
 class TestOVNChassisCharm(Helper):
+
+    def test_optional_openstack_metadata(self):
+        self.assertEquals(self.target.packages, ['ovn-host'])
+        self.assertEquals(self.target.services, ['ovn-host'])
 
     def test_run(self):
         self.patch_object(ovn_charm.subprocess, 'run')
@@ -143,6 +144,8 @@ class TestOVNChassisCharm(Helper):
             'ca': 'fakeca',
             'chain': 'fakechain',
         }]
+        self.patch_target('ovn_sysconfdir')
+        self.ovn_sysconfdir.return_value = '/etc/path'
         with mock.patch('builtins.open', create=True) as mocked_open:
             mocked_file = mock.MagicMock(spec=io.FileIO)
             mocked_open.return_value = mocked_file
@@ -197,9 +200,9 @@ class TestOVNChassisCharm(Helper):
 
     def test_configure_ovs(self):
         self.patch_target('run')
-        self.patch_object(ovn_charm, 'ovn_key')
-        self.patch_object(ovn_charm, 'ovn_cert')
-        self.patch_object(ovn_charm, 'ovn_ca_cert')
+        self.patch_object(ovn_charm.OVNConfigurationAdapter, 'ovn_key')
+        self.patch_object(ovn_charm.OVNConfigurationAdapter, 'ovn_cert')
+        self.patch_object(ovn_charm.OVNConfigurationAdapter, 'ovn_ca_cert')
         self.patch_target('get_data_ip')
         self.get_data_ip.return_value = 'fake-data-ip'
         self.patch_target('get_ovs_hostname')
