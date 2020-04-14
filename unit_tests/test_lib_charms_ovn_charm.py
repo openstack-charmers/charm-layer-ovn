@@ -27,6 +27,14 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
         super().setUp()
         self.charm_instance = mock.MagicMock()
         self.charm_instance.ovn_sysconfdir.return_value = '/etc/path'
+        self.patch('charmhelpers.contrib.openstack.context.DPDKDeviceContext',
+                   name='DPDKDeviceContext')
+        self.DPDKDeviceContext.return_value = lambda: {
+            'devices': {
+                'fakepci': 'fakeif',
+            },
+            'driver': 'fakedriver',
+        }
         self.target = ovn_charm.OVNConfigurationAdapter(
             charm_instance=self.charm_instance)
 
@@ -40,10 +48,15 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
         self.charm_instance.name = mock.PropertyMock().return_value = 'name'
         self.assertEquals(self.target.ovn_ca_cert, '/etc/path/name.crt')
 
+    def test_dpdk_device(self):
+        self.assertDictEqual(self.target.dpdk_device.devices,
+                             {'fakepci': 'fakeif'})
+        self.assertEquals(self.target.dpdk_device.driver, 'fakedriver')
+
 
 class Helper(test_utils.PatchHelper):
 
-    def setUp(self, release=None, is_flag_set_return_value=False):
+    def setUp(self, release=None, is_flag_set_return_value=False, config=None):
         super().setUp()
         self.patch_release(release or 'ussuri')
         self.patch_object(ovn_charm.reactive, 'is_flag_set',
@@ -51,6 +64,19 @@ class Helper(test_utils.PatchHelper):
         self.patch_object(
             ovn_charm.charms_openstack.adapters, '_custom_config_properties')
         self._custom_config_properties.side_effect = {}
+        self.patch('charmhelpers.contrib.openstack.context.DPDKDeviceContext',
+                   name='DPDKDeviceContext')
+        self.DPDKDeviceContext.return_value = lambda: {
+            'devices': {
+                'fakepci': 'fakeif',
+            },
+            'driver': 'fakedriver',
+        }
+        self.patch_object(ovn_charm.ch_core.hookenv, 'config')
+        self.config.side_effect = lambda: config or {
+            'enable-dpdk': False,
+            'bridge-interface-mappings': 'br-ex:eth0'
+        }
         if release and release == 'train':
             self.target = ovn_charm.BaseTrainOVNChassisCharm()
         else:
@@ -60,6 +86,14 @@ class Helper(test_utils.PatchHelper):
         setattr(self, 'is_flag_set', None)
         del(self._patches['is_flag_set'])
         del(self._patches_start['is_flag_set'])
+        self.patch('charmhelpers.contrib.openstack.context.DPDKDeviceContext',
+                   name='DPDKDeviceContext')
+        self.DPDKDeviceContext.return_value = lambda: {
+            'devices': {
+                'fakepci': 'fakeif',
+            },
+            'driver': 'fakedriver',
+        }
 
     def tearDown(self):
         super().tearDown()
@@ -107,7 +141,145 @@ class TestUssuriOVNChassisCharm(Helper):
         })
 
 
+class TestDPDKOVNChassisCharm(Helper):
+
+    def setUp(self):
+        super().setUp(config={
+            'enable-dpdk': True,
+            'dpdk-bond-mappings': ('dpdk-bond0:a0:36:9f:dd:37:a4 '
+                                   'dpdk-bond0:a0:36:9f:dd:3e:9c'),
+            'bridge-interface-mappings': 'br-ex:eth0 br-data:dpdk-bond0',
+            'ovn-bridge-mappings': (
+                'provider:br-ex other:br-data'),
+        })
+
+    def test__init__(self):
+        self.assertEquals(self.target.packages, [
+            'ovn-host', 'openvswitch-switch-dpdk'])
+        self.assertDictEqual(self.target.restart_map, {
+            '/etc/dpdk/interfaces': ['dpdk']})
+
+    def test_configure_bridges(self):
+        self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
+        dict_bpi = {
+            'br-ex': {     # bridge
+                'eth0': {  # port
+                           # interface(s) with data
+                    'eth0': {'data': 'fake'},
+                },
+            },
+            'br-data': {
+                'dpdk-xxx': {
+                    'if0': {'fake': 'data'},
+                    'if1': {'fake': 'data'}
+                },
+            },
+            'br-int': {
+                'someport': {
+                    'someport': {'data': 'fake'},
+                },
+            },
+        }
+        mock_bpi = mock.MagicMock()
+        mock_bpi.items.return_value = dict_bpi.items()
+        mock_bpi.__iter__.return_value = dict_bpi.__iter__()
+        mock_bpi.__contains__.side_effect = dict_bpi.__contains__
+        mock_bpi.__getitem__.side_effect = lambda x: dict_bpi.__getitem__(x)
+        mock_bpi.get_ifdatamap.side_effect = lambda x, y: {
+            k: v for k, v in dict_bpi[x][y].items()}
+        self.BridgePortInterfaceMap.return_value = mock_bpi
+        self.patch_object(ovn_charm.os_context, 'BondConfig')
+        mock_bondconfig = mock.MagicMock()
+        mock_bondconfig.get_ovs_portdata.return_value = 'fakebondconfig'
+        self.BondConfig.return_value = mock_bondconfig
+        self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
+
+        ovsdb = mock.MagicMock()
+        ovsdb.bridge.find.side_effect = [
+            [
+                {'name': 'delete-bridge'},
+                {'name': 'br-int'},
+            ],
+            StopIteration,
+        ]
+        ovsdb.port.find.return_value = [{'name': 'delete-port'}]
+        self.SimpleOVSDB.return_value = ovsdb
+
+        self.patch_object(ovn_charm.ch_ovs, 'del_bridge')
+        self.patch_object(ovn_charm.ch_ovs, 'del_bridge_port')
+        self.patch_object(ovn_charm.ch_ovs, 'add_bridge')
+        self.patch_object(ovn_charm.ch_ovs, 'get_bridge_ports')
+        self.get_bridge_ports().__iter__.return_value = []
+        self.patch_object(ovn_charm.ch_ovs, 'add_bridge_bond')
+        self.patch_object(ovn_charm.ch_ovs, 'add_bridge_port')
+        self.patch_target('check_if_paused')
+        self.check_if_paused.return_value = ('some', 'reason')
+        self.target.configure_bridges()
+        self.BridgePortInterfaceMap.assert_not_called()
+        self.check_if_paused.return_value = (None, None)
+        self.target.configure_bridges()
+        self.BridgePortInterfaceMap.assert_called_once_with(
+            bridges_key='bridge-interface-mappings')
+        # br-int should not be deleted when not in config, even when managed
+        self.del_bridge.assert_called_once_with('delete-bridge')
+        # since we manage it we will delete non-existant managed ports in it
+        self.del_bridge_port.assert_has_calls([
+            mock.call('br-int', 'delete-port'),
+        ])
+        # br-int will always be added/updated regardless of presence in config
+        self.add_bridge.assert_has_calls([
+            mock.call(
+                'br-int',
+                brdata={
+                    'external-ids': {'charm-ovn-chassis': 'managed'},
+                    'datapath-type': 'netdev',
+                }),
+            mock.call(
+                'br-data',
+                brdata={
+                    'external-ids': {'charm-ovn-chassis': 'managed'},
+                    'datapath-type': 'netdev',
+                }),
+            mock.call(
+                'br-ex',
+                brdata={
+                    'external-ids': {'charm-ovn-chassis': 'managed'},
+                    'datapath-type': 'netdev',
+                }),
+        ], any_order=True)
+        self.add_bridge_bond.assert_called_once_with(
+            'br-data', 'dpdk-xxx', ['if0', 'if1'], 'fakebondconfig', {
+                'if0': {
+                    'fake': 'data',
+                    'external-ids': {'charm-ovn-chassis': 'br-data'}},
+                'if1': {
+                    'fake': 'data',
+                    'external-ids': {'charm-ovn-chassis': 'br-data'}},
+            })
+        self.add_bridge_port.assert_called_once_with(
+            'br-ex', 'eth0', ifdata={
+                'data': 'fake',
+                'external-ids': {'charm-ovn-chassis': 'br-ex'}},
+            linkup=False, promisc=None, portdata={
+                'external-ids': {'charm-ovn-chassis': 'br-ex'}}),
+        ovsdb.open_vswitch.set.assert_has_calls([
+            mock.call('.', 'external_ids:ovn-bridge-mappings',
+                      'other:br-data,provider:br-ex'),
+            mock.call('.', 'external_ids:ovn-cms-options',
+                      'enable-chassis-as-gw'),
+        ], any_order=True)
+
+
 class TestOVNChassisCharm(Helper):
+
+    def setUp(self):
+        super().setUp(config={
+            'enable-dpdk': False,
+            'bridge-interface-mappings': (
+                'br-provider:00:01:02:03:04:05 br-other:eth5'),
+            'ovn-bridge-mappings': (
+                'provider:br-provider other:br-other'),
+        })
 
     def test_optional_openstack_metadata(self):
         self.assertEquals(self.target.packages, ['ovn-host'])
@@ -203,6 +375,11 @@ class TestOVNChassisCharm(Helper):
         self.get_data_ip.return_value = 'fake-data-ip'
         self.patch_target('get_ovs_hostname')
         self.get_ovs_hostname.return_value = 'fake-ovs-hostname'
+        self.patch_target('check_if_paused')
+        self.check_if_paused.return_value = ('some', 'reason')
+        self.target.configure_ovs('fake-sb-conn-str')
+        self.run.assert_not_called()
+        self.check_if_paused.return_value = (None, None)
         self.target.configure_ovs('fake-sb-conn-str')
         self.run.assert_has_calls([
             mock.call('ovs-vsctl', '--no-wait', 'set-ssl',
@@ -242,71 +419,107 @@ class TestOVNChassisCharm(Helper):
         ])
 
     def test_configure_bridges(self):
-        self.patch_object(ovn_charm.os_context, 'NeutronPortContext')
-        npc = mock.MagicMock()
-
-        def _fake_resolve_ports(mac_or_if):
-            result = []
-            for entry in mac_or_if:
-                if ':' in entry:
-                    result.append('eth0')
-                    continue
-                result.append(entry)
-            return result
-
-        npc.resolve_ports.side_effect = _fake_resolve_ports
-        self.NeutronPortContext.return_value = npc
-        self.patch_target('config')
-        self.config.__getitem__.side_effect = [
-            'br-provider:00:01:02:03:04:05 br-other:eth5',
-            'provider:br-provider other:br-other']
+        self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
+        dict_bpi = {
+            'br-provider': {  # bridge
+                'eth0': {     # port
+                              # interface(s) with interface data
+                    'eth0': {'data': 'fake'},
+                },
+            },
+            'br-other': {
+                'eth5': {
+                    'eth5': {'data': 'fake'},
+                },
+            },
+            'br-int': {
+                'someport': {
+                    'someport': {'data': 'fake'},
+                },
+            },
+        }
+        mock_bpi = mock.MagicMock()
+        mock_bpi.items.return_value = dict_bpi.items()
+        mock_bpi.__iter__.return_value = dict_bpi.__iter__()
+        mock_bpi.__contains__.side_effect = dict_bpi.__contains__
+        mock_bpi.__getitem__.side_effect = lambda x: dict_bpi.__getitem__(x)
+        mock_bpi.get_ifdatamap.side_effect = lambda x, y: {
+            k: v for k, v in dict_bpi[x][y].items()}
+        self.BridgePortInterfaceMap.return_value = mock_bpi
+        self.patch_object(ovn_charm.os_context, 'BondConfig')
         self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
-        bridges = mock.MagicMock()
-        bridges.bridge.find.side_effect = [
+
+        ovsdb = mock.MagicMock()
+        ovsdb.bridge.find.side_effect = [
             [
                 {'name': 'delete-bridge'},
-                {'name': 'br-other'}
+                {'name': 'br-other'},
+                {'name': 'br-int'},
             ],
             StopIteration,
         ]
-        ports = mock.MagicMock()
-        ports.port.find.side_effect = [[{'name': 'delete-port'}]]
-        opvs = mock.MagicMock()
-        self.SimpleOVSDB.side_effect = [bridges, ports, opvs]
+        ovsdb.port.find.return_value = [{'name': 'delete-port'}]
+        self.SimpleOVSDB.return_value = ovsdb
+
         self.patch_object(ovn_charm.ch_ovs, 'del_bridge')
         self.patch_object(ovn_charm.ch_ovs, 'del_bridge_port')
         self.patch_object(ovn_charm.ch_ovs, 'add_bridge')
         self.patch_object(ovn_charm.ch_ovs, 'get_bridge_ports')
         self.get_bridge_ports().__iter__.return_value = []
         self.patch_object(ovn_charm.ch_ovs, 'add_bridge_port')
-        self.patch_target('run')
+        self.patch_target('check_if_paused')
+        self.check_if_paused.return_value = ('some', 'reason')
         self.target.configure_bridges()
-        npc.resolve_ports.assert_has_calls([
-            mock.call(['00:01:02:03:04:05']),
-            mock.call(['eth5']),
-        ], any_order=True)
-        bridges.bridge.find.assert_has_calls([
-            mock.call('name=br-provider'),
-            mock.call('name=br-other'),
-        ], any_order=True)
+        self.BridgePortInterfaceMap.assert_not_called()
+        self.check_if_paused.return_value = (None, None)
+        self.target.configure_bridges()
+        self.BridgePortInterfaceMap.assert_called_once_with(
+            bridges_key='bridge-interface-mappings')
+        # br-int should not be deleted when not in config, even when managed
         self.del_bridge.assert_called_once_with('delete-bridge')
-        self.del_bridge_port.assert_called_once_with('br-other', 'delete-port')
-        brdata = {'external-ids': {'charm-ovn-chassis': 'managed'}}
+        # since we manage it we will delete non-existant managed ports in it
+        self.del_bridge_port.assert_has_calls([
+            mock.call('br-other', 'delete-port'),
+            mock.call('br-int', 'delete-port'),
+        ])
+        # br-int will always be added/updated regardless of presence in config
         self.add_bridge.assert_has_calls([
-            mock.call('br-provider', brdata=brdata),
-            mock.call('br-other', brdata=brdata),
+            mock.call(
+                'br-int',
+                brdata={
+                    'external-ids': {'charm-ovn-chassis': 'managed'},
+                    'datapath-type': 'system',
+                }),
+            mock.call(
+                'br-provider',
+                brdata={
+                    'external-ids': {'charm-ovn-chassis': 'managed'},
+                    'datapath-type': 'system',
+                }),
+            mock.call(
+                'br-other',
+                brdata={
+                    'external-ids': {'charm-ovn-chassis': 'managed'},
+                    'datapath-type': 'system',
+                }),
         ], any_order=True)
         self.add_bridge_port.assert_has_calls([
             mock.call(
                 'br-provider', 'eth0', ifdata={
+                    'data': 'fake',
+                    'external-ids': {'charm-ovn-chassis': 'br-provider'}},
+                linkup=True, promisc=None, portdata={
                     'external-ids': {'charm-ovn-chassis': 'br-provider'}}),
             mock.call(
                 'br-other', 'eth5', ifdata={
+                    'data': 'fake',
+                    'external-ids': {'charm-ovn-chassis': 'br-other'}},
+                linkup=True, promisc=None, portdata={
                     'external-ids': {'charm-ovn-chassis': 'br-other'}}),
         ], any_order=True)
-        opvs.open_vswitch.set.assert_has_calls([
+        ovsdb.open_vswitch.set.assert_has_calls([
             mock.call('.', 'external_ids:ovn-bridge-mappings',
                       'other:br-other,provider:br-provider'),
             mock.call('.', 'external_ids:ovn-cms-options',
                       'enable-chassis-as-gw'),
-        ])
+        ], any_order=True)

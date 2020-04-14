@@ -69,6 +69,9 @@ def configure_bridges():
 def configure_ovs():
     ovsdb = reactive.endpoint_from_flag('ovsdb.available')
     with charm.provide_charm_instance() as charm_instance:
+        if reactive.is_flag_set('config.changed.enable-dpdk'):
+            # Install required packages and/or run update-alternatives
+            charm_instance.install()
         charm_instance.configure_ovs(','.join(ovsdb.db_sb_connection_strs))
         charm_instance.render_with_interfaces(
             charm.optional_interfaces((ovsdb,),
