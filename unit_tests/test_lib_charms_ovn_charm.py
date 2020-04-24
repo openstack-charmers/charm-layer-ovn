@@ -51,10 +51,6 @@ class Helper(test_utils.PatchHelper):
         self.patch_object(
             ovn_charm.charms_openstack.adapters, '_custom_config_properties')
         self._custom_config_properties.side_effect = {}
-        self.patch_object(ovn_charm.ovn, 'ovn_rundir')
-        self.ovn_rundir.return_value = '/var/path'
-        self.patch_object(ovn_charm.ovn, 'ovn_sysconfdir')
-        self.ovn_sysconfdir.return_value = '/etc/path'
         if release and release == 'train':
             self.target = ovn_charm.BaseTrainOVNChassisCharm()
         else:
@@ -191,9 +187,9 @@ class TestOVNChassisCharm(Helper):
         self.assertEquals(self.target.get_data_ip(), '10.5.0.102')
 
     def test_get_ovs_hostname(self):
-        self.patch_object(ovn_charm.ovn, 'SimpleOVSDB')
+        self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
         opvs = mock.MagicMock()
-        opvs.__iter__.return_value = [
+        opvs.open_vswitch.__iter__.return_value = [
             {'external_ids': {'hostname': 'fake-ovs-hostname'}}]
         self.SimpleOVSDB.return_value = opvs
         self.assertEquals(self.target.get_ovs_hostname(), 'fake-ovs-hostname')
@@ -222,11 +218,11 @@ class TestOVNChassisCharm(Helper):
         ])
         self.run.reset_mock()
         self.target.enable_openstack = True
-        self.patch_object(ovn_charm.ovn, 'SimpleOVSDB')
+        self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
         managers = mock.MagicMock()
         self.SimpleOVSDB.return_value = managers
         self.target.configure_ovs('fake-sb-conn-str')
-        managers.find.assert_called_once_with(
+        managers.manager.find.assert_called_once_with(
             'target="ptcp:6640:127.0.0.1"')
         self.run.assert_has_calls([
             mock.call('ovs-vsctl', '--no-wait', 'set-ssl',
@@ -264,9 +260,9 @@ class TestOVNChassisCharm(Helper):
         self.config.__getitem__.side_effect = [
             'br-provider:00:01:02:03:04:05 br-other:eth5',
             'provider:br-provider other:br-other']
-        self.patch_object(ovn_charm.ovn, 'SimpleOVSDB')
+        self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
         bridges = mock.MagicMock()
-        bridges.find.side_effect = [
+        bridges.bridge.find.side_effect = [
             [
                 {'name': 'delete-bridge'},
                 {'name': 'br-other'}
@@ -274,32 +270,33 @@ class TestOVNChassisCharm(Helper):
             StopIteration,
         ]
         ports = mock.MagicMock()
-        ports.find.side_effect = [[{'name': 'delete-port'}]]
+        ports.port.find.side_effect = [[{'name': 'delete-port'}]]
         opvs = mock.MagicMock()
         self.SimpleOVSDB.side_effect = [bridges, ports, opvs]
-        self.patch_object(ovn_charm.ovn, 'del_br')
-        self.patch_object(ovn_charm.ovn, 'del_port')
-        self.patch_object(ovn_charm.ovn, 'add_br')
-        self.patch_object(ovn_charm.ovn, 'list_ports')
-        self.list_ports().__iter__.return_value = []
-        self.patch_object(ovn_charm.ovn, 'add_port')
+        self.patch_object(ovn_charm.ch_ovs, 'del_bridge')
+        self.patch_object(ovn_charm.ch_ovs, 'del_bridge_port')
+        self.patch_object(ovn_charm.ch_ovs, 'add_bridge')
+        self.patch_object(ovn_charm.ch_ovs, 'get_bridge_ports')
+        self.get_bridge_ports().__iter__.return_value = []
+        self.patch_object(ovn_charm.ch_ovs, 'add_bridge_port')
         self.patch_target('run')
         self.target.configure_bridges()
         npc.resolve_ports.assert_has_calls([
             mock.call(['00:01:02:03:04:05']),
             mock.call(['eth5']),
         ], any_order=True)
-        bridges.find.assert_has_calls([
+        bridges.bridge.find.assert_has_calls([
             mock.call('name=br-provider'),
             mock.call('name=br-other'),
         ], any_order=True)
-        self.del_br.assert_called_once_with('delete-bridge')
-        self.del_port.assert_called_once_with('br-other', 'delete-port')
-        self.add_br.assert_has_calls([
-            mock.call('br-provider', ('charm-ovn-chassis', 'managed')),
-            mock.call('br-other', ('charm-ovn-chassis', 'managed')),
+        self.del_bridge.assert_called_once_with('delete-bridge')
+        self.del_bridge_port.assert_called_once_with('br-other', 'delete-port')
+        brdata = {'external-ids': {'charm-ovn-chassis': 'managed'}}
+        self.add_bridge.assert_has_calls([
+            mock.call('br-provider', brdata=brdata),
+            mock.call('br-other', brdata=brdata),
         ], any_order=True)
-        self.add_port.assert_has_calls([
+        self.add_bridge_port.assert_has_calls([
             mock.call(
                 'br-provider', 'eth0', ifdata={
                     'external-ids': {'charm-ovn-chassis': 'br-provider'}}),
@@ -307,11 +304,7 @@ class TestOVNChassisCharm(Helper):
                 'br-other', 'eth5', ifdata={
                     'external-ids': {'charm-ovn-chassis': 'br-other'}}),
         ], any_order=True)
-        self.run.assert_has_calls([
-            mock.call('ip', 'link', 'set', 'eth0', 'up'),
-            mock.call('ip', 'link', 'set', 'eth5', 'up'),
-        ], any_order=True)
-        opvs.set.assert_has_calls([
+        opvs.open_vswitch.set.assert_has_calls([
             mock.call('.', 'external_ids:ovn-bridge-mappings',
                       'other:br-other,provider:br-provider'),
             mock.call('.', 'external_ids:ovn-cms-options',

@@ -20,11 +20,11 @@ import charms.reactive as reactive
 
 import charmhelpers.core as ch_core
 import charmhelpers.contrib.openstack.context as os_context
+import charmhelpers.contrib.network.ovs as ch_ovs
+import charmhelpers.contrib.network.ovs.ovsdb as ch_ovsdb
 
 import charms_openstack.adapters
 import charms_openstack.charm
-
-import charms.ovn as ovn
 
 
 class OVNConfigurationAdapter(
@@ -187,7 +187,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         #
         # In the unlikely event of the hostname not being set in the database
         # we want to error out as this will cause malfunction.
-        for row in ovn.SimpleOVSDB('ovs-vsctl', 'Open_vSwitch'):
+        for row in ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch:
             return row['external_ids']['hostname']
 
     def configure_ovs(self, sb_conn):
@@ -229,8 +229,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             # agent too, as it allows us to run it as a non-root user.
             # LP: #1852200
             target = 'ptcp:6640:127.0.0.1'
-            for el in ovn.SimpleOVSDB(
-                    'ovs-vsctl', 'manager').find('target="{}"'.format(target)):
+            for el in ch_ovsdb.SimpleOVSDB(
+                    'ovs-vsctl').manager.find('target="{}"'.format(target)):
                 break
             else:
                 self.run('ovs-vsctl', '--id', '@manager',
@@ -269,8 +269,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                     ovn_br_map_str += ','
                 ovn_br_map_str += '{}:{}'.format(network, bridge)
 
-        bridges = ovn.SimpleOVSDB('ovs-vsctl', 'bridge')
-        ports = ovn.SimpleOVSDB('ovs-vsctl', 'port')
+        bridges = ch_ovsdb.SimpleOVSDB('ovs-vsctl').bridge
+        ports = ch_ovsdb.SimpleOVSDB('ovs-vsctl').port
         for bridge in bridges.find('external_ids:charm-ovn-chassis=managed'):
             # remove bridges and ports that are managed by us and no longer in
             # config
@@ -279,7 +279,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                     'present in configuration for this unit.'
                                     .format(bridge['name']),
                                     level=ch_core.hookenv.DEBUG)
-                ovn.del_br(bridge['name'])
+                ch_ovs.del_bridge(bridge['name'])
             else:
                 for port in ports.find('external_ids:charm-ovn-chassis={}'
                                        .format(bridge['name'])):
@@ -290,32 +290,29 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                             .format(port['name'],
                                                     bridge['name']),
                                             level=ch_core.hookenv.DEBUG)
-                        ovn.del_port(bridge['name'], port['name'])
+                        ch_ovs.del_bridge_port(bridge['name'], port['name'])
+        brdata = {'external-ids': {'charm-ovn-chassis': 'managed'}}
         for br in ifbridges.keys():
             if br not in ovnbridges:
                 continue
             try:
                 next(bridges.find('name={}'.format(br)))
             except StopIteration:
-                ovn.add_br(br, ('charm-ovn-chassis', 'managed'))
+                ch_ovs.add_bridge(br, brdata=brdata)
             else:
                 ch_core.hookenv.log('skip adding already existing bridge "{}"'
                                     .format(br), level=ch_core.hookenv.DEBUG)
             for port in ifbridges[br]:
-                if port not in ovn.list_ports(br):
-                    ovn.add_port(br, port, ifdata={
+                if port not in ch_ovs.get_bridge_ports(br):
+                    ch_ovs.add_bridge_port(br, port, ifdata={
                         'external-ids': {'charm-ovn-chassis': br}})
-                    # NOTE(fnordahl) This is mostly a workaround for CI, in the
-                    # real world the bare metal provider would most likely have
-                    # configured and brought up the physical port for us.
-                    self.run('ip', 'link', 'set', port, 'up')
                 else:
                     ch_core.hookenv.log('skip adding already existing port '
                                         '"{}" to bridge "{}"'
                                         .format(port, br),
                                         level=ch_core.hookenv.DEBUG)
 
-        opvs = ovn.SimpleOVSDB('ovs-vsctl', 'Open_vSwitch')
+        opvs = ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch
         if ovn_br_map_str:
             opvs.set('.', 'external_ids:ovn-bridge-mappings', ovn_br_map_str)
             # NOTE(fnordahl): Workaround for LP: #1848757
