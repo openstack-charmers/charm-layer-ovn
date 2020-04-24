@@ -54,15 +54,11 @@ def enable_openstack():
         charm_instance.assess_status()
 
 
-@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'charm.installed')
-@reactive.when_any('config.changed.ovn-bridge-mappings',
-                   'config.changed.bridge-interface-mappings',
-                   'run-default-upgrade-charm')
+@reactive.when_not('run-default-update-status')
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'config.rendered')
 def configure_bridges():
     with charm.provide_charm_instance() as charm_instance:
         charm_instance.configure_bridges()
-        reactive.clear_flag('config.changed.ovn-bridge-mappings')
-        reactive.clear_flag('config.changed.bridge-interface-mappings')
         charm_instance.assess_status()
 
 

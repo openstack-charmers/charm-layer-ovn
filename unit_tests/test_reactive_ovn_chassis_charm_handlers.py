@@ -46,13 +46,14 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'nova-compute.connected',),
                 'configure_bridges': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
-                    'charm.installed',),
+                    'config.rendered',),
             },
             'when_not': {
                 'disable_openstack': ('run-default-update-status',
                                       'nova-compute.connected',),
                 'enable_openstack': ('run-default-update-status',),
                 'configure_ovs': ('run-default-update-status',),
+                'configure_bridges': ('run-default-update-status',),
             },
             'when_any': {
                 'configure_bridges': (
