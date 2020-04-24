@@ -138,6 +138,7 @@ class TestUssuriOVNChassisCharm(Helper):
         self.assertDictEqual(self.target.restart_map, {
             '/etc/neutron/neutron_ovn_metadata_agent.ini': [
                 'neutron-ovn-metadata-agent'],
+            '/etc/openvswitch/system-id.conf': [],
         })
 
 
@@ -157,7 +158,9 @@ class TestDPDKOVNChassisCharm(Helper):
         self.assertEquals(self.target.packages, [
             'ovn-host', 'openvswitch-switch-dpdk'])
         self.assertDictEqual(self.target.restart_map, {
-            '/etc/dpdk/interfaces': ['dpdk']})
+            '/etc/dpdk/interfaces': ['dpdk'],
+            '/etc/openvswitch/system-id.conf': [],
+        })
 
     def test_configure_bridges(self):
         self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')

@@ -65,6 +65,10 @@ class OVNConfigurationAdapter(
     def dpdk_device(self):
         return self._dpdk_device
 
+    @property
+    def chassis_name(self):
+        return self.charm_instance.get_ovs_hostname()
+
 
 class NeutronPluginRelationAdapter(
         charms_openstack.adapters.OpenStackRelationAdapter):
@@ -109,7 +113,16 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         # specialized class instances and can not rely on class variables.
         self.packages = ['ovn-host']
         self.services = ['ovn-host']
-        self.restart_map = {}
+        # Note that we use the standard config render features of
+        # charms.openstack to just copy this file in place hence no
+        # service attached.
+        #
+        # The charm will configure the system-id at runtime in the
+        # ``configure_ovs`` method.  The openvswitch-switch init script will
+        # use the on-disk file on service restart.
+        self.restart_map = {
+            '/etc/openvswitch/system-id.conf': [],
+        }
 
         if self.options.enable_dpdk:
             self.packages.extend(['openvswitch-switch-dpdk'])
