@@ -20,31 +20,59 @@ import charms.reactive as reactive
 
 import charmhelpers.core as ch_core
 import charmhelpers.contrib.openstack.context as os_context
+import charmhelpers.contrib.network.ovs as ch_ovs
+import charmhelpers.contrib.network.ovs.ovsdb as ch_ovsdb
 
 import charms_openstack.adapters
 import charms_openstack.charm
 
-import charms.ovn as ovn
 
+class OVNConfigurationAdapter(
+        charms_openstack.adapters.ConfigurationAdapter):
+    """Provide a configuration adapter for OVN."""
 
-# NOTE: Do not use ``config_property`` decorator here as it will break when
-# module is imported multiple times.  Add calls to ``config_property`` to your
-# class initializer referencing these helpers instead.
-def ovn_key(cls):
-    return os.path.join(ovn.ovn_sysconfdir(), 'key_host')
+    class OSContextObjectView(object):
 
+        def __init__(self, ctxt):
+            """Initialize OSContextObjectView instance.
 
-def ovn_cert(cls):
-    return os.path.join(ovn.ovn_sysconfdir(), 'cert_host')
+            :param ctxt: Dictionary with context variables
+            :type ctxt: Dict[str,any]
+            """
+            self.__dict__ = ctxt
 
+    def __init__(self, **kwargs):
+        """Initialize contexts consumed from charm helpers."""
+        super().__init__(**kwargs)
+        self._dpdk_device = self.OSContextObjectView(
+            os_context.DPDKDeviceContext(
+                bridges_key=self.charm_instance.bridges_key)())
 
-def ovn_ca_cert(cls):
-    return os.path.join(ovn.ovn_sysconfdir(),
-                        '{}.crt'.format(cls.charm_instance.name))
+    @property
+    def ovn_key(self):
+        return os.path.join(self.charm_instance.ovn_sysconfdir(), 'key_host')
+
+    @property
+    def ovn_cert(self):
+        return os.path.join(self.charm_instance.ovn_sysconfdir(), 'cert_host')
+
+    @property
+    def ovn_ca_cert(self):
+        return os.path.join(self.charm_instance.ovn_sysconfdir(),
+                            '{}.crt'.format(self.charm_instance.name))
+
+    @property
+    def dpdk_device(self):
+        return self._dpdk_device
+
+    @property
+    def chassis_name(self):
+        return self.charm_instance.get_ovs_hostname()
 
 
 class NeutronPluginRelationAdapter(
         charms_openstack.adapters.OpenStackRelationAdapter):
+    """Relation adapter for neutron-plugin interface."""
 
     @property
     def metadata_shared_secret(self):
@@ -53,12 +81,15 @@ class NeutronPluginRelationAdapter(
 
 class OVNChassisCharmRelationAdapters(
         charms_openstack.adapters.OpenStackRelationAdapters):
+    """Provide dictionary of relation adapters for use by OVN Chassis charms.
+    """
     relation_adapters = {
         'nova_compute': NeutronPluginRelationAdapter,
     }
 
 
 class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
+    """Base class for the OVN Chassis charms."""
     abstract_class = True
     package_codenames = {
         'ovn-host': collections.OrderedDict([
@@ -68,28 +99,93 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     }
     release_pkg = 'ovn-host'
     adapters_class = OVNChassisCharmRelationAdapters
+    configuration_class = OVNConfigurationAdapter
     required_relations = ['certificates', 'ovsdb']
     python_version = 3
     enable_openstack = False
+    bridges_key = 'bridge-interface-mappings'
 
     def __init__(self, **kwargs):
+        """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
         # NOTE: we must initialize the packages and services variables as
         # instance variables as we are extending them in the release
         # specialized class instances and can not rely on class variables.
         self.packages = ['ovn-host']
         self.services = ['ovn-host']
-        try:
-            charms_openstack.adapters.config_property(ovn_key)
-            charms_openstack.adapters.config_property(ovn_cert)
-            charms_openstack.adapters.config_property(ovn_ca_cert)
-        except RuntimeError:
-            # The custom config properties have already been registered
-            pass
+        # Note that we use the standard config render features of
+        # charms.openstack to just copy this file in place hence no
+        # service attached.
+        #
+        # The charm will configure the system-id at runtime in the
+        # ``configure_ovs`` method.  The openvswitch-switch init script will
+        # use the on-disk file on service restart.
+        self.restart_map = {
+            '/etc/openvswitch/system-id.conf': [],
+        }
+
+        if self.options.enable_dpdk:
+            self.packages.extend(['openvswitch-switch-dpdk'])
+            # The ``dpdk`` system init script takes care of binding devices
+            # to the driver specified in configuration at run- and boot- time.
+            #
+            # NOTE: we must take care to perform device lookup and store
+            # mapping information in the system before binding the interfaces
+            # as important information such as hardware ethernet address (MAC)
+            # will be harder to get at once bound. (The device disappears from
+            # sysfs)
+            self.restart_map.update({
+                '/etc/dpdk/interfaces': ['dpdk'],
+            })
+
         if reactive.is_flag_set('charm.ovn-chassis.enable-openstack'):
             self.enable_openstack = True
+            if self.options.enable_dpdk:
+                # Note that we use the standard config render features of
+                # charms.openstack to just copy this file in place hence no
+                # service attached. systemd-tmpfiles-setup will take care of
+                # it at boot and we will do a first-time initialization in the
+                # ``install`` method.
+                self.restart_map.update({
+                    '/etc/tmpfiles.d/nova-ovs-vhost-user.conf': []})
+
+    def install(self):
+        """Extend the default install method to handle update-alternatives.
+        """
+        super().install()
+        if self.options.enable_dpdk:
+            self.run('update-alternatives', '--set', 'ovs-vswitchd',
+                     '/usr/lib/openvswitch-switch-dpdk/ovs-vswitchd-dpdk')
+            # Do first-time initialization of the directory used for vhostuser
+            # sockets.  Neutron is made aware of this path centrally by the
+            # neutron-api-plugin-ovn charm.
+            #
+            # Neutron will make per chassis decisions based on chassis
+            # configuration whether vif_type will be 'ovs' or 'vhostuser'.
+            #
+            # This allows having a mix of DPDK and non-DPDK nodes in the same
+            # deployment.
+            if self.enable_openstack and not os.path.exists(
+                    '/run/libvirt-vhost-user'):
+                self.run('systemd-tmpfiles', '--create')
+        else:
+            self.run('update-alternatives', '--set', 'ovs-vswitchd',
+                     '/usr/lib/openvswitch-switch/ovs-vswitchd')
+
+    @staticmethod
+    def ovn_sysconfdir():
+        """Provide path to OVN system configuration."""
+        return '/etc/ovn'
 
     def run(self, *args):
+        """Run external process and return result.
+
+        :param *args: Command name and arguments.
+        :type *args: str
+        :returns: Data about completed process
+        :rtype: subprocess.CompletedProcess
+        :raises: subprocess.CalledProcessError
+        """
         cp = subprocess.run(
             args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True,
             universal_newlines=True)
@@ -106,20 +202,24 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         return {self.get_ovs_hostname(): {'sans': []}}
 
     def configure_tls(self, certificates_interface=None):
-        """Override default handler prepare certs per OVNs taste."""
+        """Override default handler prepare certs per OVNs taste.
+
+        :param certificates_interface: A certificates relation
+        :type certificates_interface: Optional[TlsRequires(reactive.Endpoint)]
+        """
         # The default handler in ``OpenStackCharm`` class does the CA only
         tls_objects = self.get_certs_and_keys(
             certificates_interface=certificates_interface)
 
         for tls_object in tls_objects:
-            with open(ovn_ca_cert(self.adapters_instance), 'w') as crt:
+            with open(self.options.ovn_ca_cert, 'w') as crt:
                 chain = tls_object.get('chain')
                 if chain:
                     crt.write(tls_object['ca'] + os.linesep + chain)
                 else:
                     crt.write(tls_object['ca'])
 
-            self.configure_cert(ovn.ovn_sysconfdir(),
+            self.configure_cert(self.ovn_sysconfdir(),
                                 tls_object['cert'],
                                 tls_object['key'],
                                 cn='host')
@@ -169,19 +269,62 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         #
         # In the unlikely event of the hostname not being set in the database
         # we want to error out as this will cause malfunction.
-        for row in ovn.SimpleOVSDB('ovs-vsctl', 'Open_vSwitch'):
+        for row in ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch:
             return row['external_ids']['hostname']
 
+    def configure_ovs_dpdk(self):
+        """Configure DPDK specific bits in Open vSwitch.
+
+        :returns: Whether something changed
+        :rtype: bool
+        """
+        something_changed = False
+        dpdk_context = os_context.OVSDPDKDeviceContext(
+            bridges_key=self.bridges_key)
+        opvs = ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch
+        other_config_fmt = 'other_config:{}'
+        for row in opvs:
+            for k, v in (('dpdk-lcore-mask', dpdk_context.cpu_mask()),
+                         ('dpdk-socket-mem', dpdk_context.socket_memory()),
+                         ('dpdk-init', 'true'),
+                         ('dpdk-extra', dpdk_context.pci_whitelist()),
+                         ):
+                if row.get(other_config_fmt.format(k)) != v:
+                    something_changed = True
+                    if v:
+                        opvs.set('.', other_config_fmt.format(k), v)
+                    else:
+                        opvs.remove('.', 'other_config', k)
+        return something_changed
+
     def configure_ovs(self, sb_conn):
+        """Global Open vSwitch configuration tasks.
+
+        :param sb_conn: Comma separated string of OVSDB connection methods.
+        :type sb_conn: str
+
+        Note that running this method will restart the ``openvswitch-switch``
+        service if required.
+        """
+        if self.check_if_paused() != (None, None):
+            ch_core.hookenv.log('Unit is paused, defer global Open vSwitch '
+                                'configuration tasks.',
+                                level=ch_core.hookenv.INFO)
+            return
+        # Must make sure the service runs otherwise calls to ``ovs-vsctl`` will
+        # hang.
+        ch_core.host.service_start('openvswitch-switch')
+
+        restart_required = False
         # NOTE(fnordahl): Due to what is probably a bug in Open vSwitch
         # subsequent calls to ``ovs-vsctl set-ssl`` will hang indefinitely
         # Work around this by passing ``--no-wait``.
         self.run('ovs-vsctl',
                  '--no-wait',
                  'set-ssl',
-                 ovn_key(self.adapters_instance),
-                 ovn_cert(self.adapters_instance),
-                 ovn_ca_cert(self.adapters_instance))
+                 self.options.ovn_key,
+                 self.options.ovn_cert,
+                 self.options.ovn_ca_cert)
 
         # The local ``ovn-controller`` process will retrieve information about
         # how to connect to OVN from the local Open vSwitch database.
@@ -206,31 +349,30 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             # agent too, as it allows us to run it as a non-root user.
             # LP: #1852200
             target = 'ptcp:6640:127.0.0.1'
-            for el in ovn.SimpleOVSDB(
-                    'ovs-vsctl', 'manager').find('target="{}"'.format(target)):
+            for el in ch_ovsdb.SimpleOVSDB(
+                    'ovs-vsctl').manager.find('target="{}"'.format(target)):
                 break
             else:
                 self.run('ovs-vsctl', '--id', '@manager',
                          'create', 'Manager', 'target="{}"'.format(target),
                          '--', 'add', 'Open_vSwitch', '.', 'manager_options',
                          '@manager')
+        if self.options.enable_dpdk:
+            restart_required = self.configure_ovs_dpdk()
+        if restart_required:
+            ch_core.host.service_restart('openvswitch-switch')
 
     def configure_bridges(self):
-        # we use the resolve_port method of NeutronPortContext to translate
-        # MAC addresses into interface names
-        npc = os_context.NeutronPortContext()
-
-        # build map of bridge config with existing interfaces on host
-        ifbridges = collections.defaultdict(list)
-        config_ifbm = self.config['bridge-interface-mappings'] or ''
-        for pair in config_ifbm.split():
-            bridge, ifname_or_mac = pair.split(':', 1)
-            ifbridges[bridge].append(ifname_or_mac)
-        for br in ifbridges.keys():
-            # resolve mac addresses to interface names
-            ifbridges[br] = npc.resolve_ports(ifbridges[br])
-        # remove empty bridges
-        ifbridges = {k: v for k, v in ifbridges.items() if len(v) > 0}
+        """Configure Open vSwitch bridges ports and interfaces."""
+        if self.check_if_paused() != (None, None):
+            ch_core.hookenv.log('Unit is paused, defer Open vSwitch bridge '
+                                'port interface configuration tasks.',
+                                level=ch_core.hookenv.INFO)
+            return
+        bpi = os_context.BridgePortInterfaceMap(bridges_key=self.bridges_key)
+        bond_config = os_context.BondConfig()
+        ch_core.hookenv.log('BridgePortInterfaceMap: "{}"'.format(bpi.items()),
+                            level=ch_core.hookenv.DEBUG)
 
         # build map of bridges to ovn networks with existing if-mapping on host
         # and at the same time build ovn-bridge-mappings string
@@ -239,59 +381,68 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         config_obm = self.config['ovn-bridge-mappings'] or ''
         for pair in sorted(config_obm.split()):
             network, bridge = pair.split(':', 1)
-            if bridge in ifbridges:
+            if bridge in bpi:
                 ovnbridges[bridge].append(network)
                 if ovn_br_map_str:
                     ovn_br_map_str += ','
                 ovn_br_map_str += '{}:{}'.format(network, bridge)
 
-        bridges = ovn.SimpleOVSDB('ovs-vsctl', 'bridge')
-        ports = ovn.SimpleOVSDB('ovs-vsctl', 'port')
+        bridges = ch_ovsdb.SimpleOVSDB('ovs-vsctl').bridge
+        ports = ch_ovsdb.SimpleOVSDB('ovs-vsctl').port
         for bridge in bridges.find('external_ids:charm-ovn-chassis=managed'):
             # remove bridges and ports that are managed by us and no longer in
             # config
-            if bridge['name'] not in ifbridges:
+            if bridge['name'] not in bpi and bridge['name'] != 'br-int':
                 ch_core.hookenv.log('removing bridge "{}" as it is no longer'
                                     'present in configuration for this unit.'
                                     .format(bridge['name']),
                                     level=ch_core.hookenv.DEBUG)
-                ovn.del_br(bridge['name'])
+                ch_ovs.del_bridge(bridge['name'])
             else:
                 for port in ports.find('external_ids:charm-ovn-chassis={}'
                                        .format(bridge['name'])):
-                    if port['name'] not in ifbridges[bridge['name']]:
+                    if port['name'] not in bpi[bridge['name']]:
                         ch_core.hookenv.log('removing port "{}" from bridge '
                                             '"{}" as it is no longer present '
                                             'in configuration for this unit.'
                                             .format(port['name'],
                                                     bridge['name']),
                                             level=ch_core.hookenv.DEBUG)
-                        ovn.del_port(bridge['name'], port['name'])
-        for br in ifbridges.keys():
+                        ch_ovs.del_bridge_port(bridge['name'], port['name'])
+        brdata = {'external-ids': {'charm-ovn-chassis': 'managed'}}
+        if self.options.enable_dpdk:
+            brdata.update({'datapath-type': 'netdev'})
+        else:
+            brdata.update({'datapath-type': 'system'})
+        ch_ovs.add_bridge('br-int', brdata=brdata)
+        for br in bpi:
             if br not in ovnbridges:
                 continue
-            try:
-                next(bridges.find('name={}'.format(br)))
-            except StopIteration:
-                ovn.add_br(br, ('charm-ovn-chassis', 'managed'))
-            else:
-                ch_core.hookenv.log('skip adding already existing bridge "{}"'
-                                    .format(br), level=ch_core.hookenv.DEBUG)
-            for port in ifbridges[br]:
-                if port not in ovn.list_ports(br):
-                    ovn.add_port(br, port, ifdata={
-                        'external-ids': {'charm-ovn-chassis': br}})
-                    # NOTE(fnordahl) This is mostly a workaround for CI, in the
-                    # real world the bare metal provider would most likely have
-                    # configured and brought up the physical port for us.
-                    self.run('ip', 'link', 'set', port, 'up')
-                else:
-                    ch_core.hookenv.log('skip adding already existing port '
-                                        '"{}" to bridge "{}"'
-                                        .format(port, br),
-                                        level=ch_core.hookenv.DEBUG)
+            ch_ovs.add_bridge(br, brdata=brdata)
+            for port in bpi[br]:
+                ifdatamap = bpi.get_ifdatamap(br, port)
+                ifdatamap = {
+                    port: {
+                        **ifdata,
+                        **{'external-ids': {'charm-ovn-chassis': br}},
+                    }
+                    for port, ifdata in ifdatamap.items()
+                }
 
-        opvs = ovn.SimpleOVSDB('ovs-vsctl', 'Open_vSwitch')
+                if len(ifdatamap) > 1:
+                    ch_ovs.add_bridge_bond(br, port, list(ifdatamap.keys()),
+                                           bond_config.get_ovs_portdata(port),
+                                           ifdatamap)
+                else:
+                    ch_ovs.add_bridge_port(br, port,
+                                           ifdata=ifdatamap.get(port, {}),
+                                           linkup=not self.options.enable_dpdk,
+                                           promisc=None,
+                                           portdata={
+                                               'external-ids': {
+                                                   'charm-ovn-chassis': br}})
+
+        opvs = ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch
         if ovn_br_map_str:
             opvs.set('.', 'external_ids:ovn-bridge-mappings', ovn_br_map_str)
             # NOTE(fnordahl): Workaround for LP: #1848757
@@ -304,9 +455,15 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
 
 class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
+    """Train incarnation of the OVN Chassis base charm class."""
     abstract_class = True
 
+    @staticmethod
+    def ovn_sysconfdir():
+        return '/etc/openvswitch'
+
     def __init__(self, **kwargs):
+        """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
         if self.enable_openstack:
             metadata_agent = 'networking-ovn-metadata-agent'
@@ -319,9 +476,11 @@ class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
 
 
 class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
+    """Ussuri incarnation of the OVN Chassis base charm class."""
     abstract_class = True
 
     def __init__(self, **kwargs):
+        """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
         if self.enable_openstack:
             metadata_agent = 'neutron-ovn-metadata-agent'

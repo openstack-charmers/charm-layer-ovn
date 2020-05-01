@@ -58,6 +58,68 @@ options:
       Add provider networks for use with external Layer3 connectivity to
       individual chassis located near the datacenter border gateways by adding
       the MAC address of the physical interfaces of those units.
+  dpdk-bond-mappings:
+    type: string
+    default:
+    description: |
+      Space-delimited list of bond:port mappings. The DPDK assigned ports will
+      be added to their corresponding bond, which in turn will be put into the
+      bridge as specified in data-port.
+      .
+      This option is supported only when enable-dpdk is true.
+  dpdk-bond-config:
+    type: string
+    default: ":balance-tcp:active:fast"
+    description: |
+      Space delimited list of bond:mode:lacp:lacp-time, where the arguments meaning is:
+      .
+          * bond - the bond name. If not specified the configuration applies to all bonds
+          * mode - the bond mode of operation. Possible values are:
+            - active-backup - No load balancing is offered in this mode and only one of
+                              the member ports is active/used at a time.
+            - balance-slb - Considered as a static load-balancing mode. Traffic is load
+                            balanced between member ports based on the source MAC and VLAN.
+            - balance-tcp - This is the preferred bonding mode. It offers traffic load
+                            balancing based on 5-tuple header fields. LACP must be enabled
+                            at both endpoints to use this mode. The aggregate link will
+                            fall back to default mode (active-passive) in the event of LACP
+                            negotiation failure.
+          * lacp - active, passive or off
+          * lacp-time - fast or slow. LACP negotiation time interval - 30 ms or 1 second
+  enable-dpdk:
+    type: boolean
+    default: false
+    description: |
+      Enable DPDK fast userspace networking; this requires use of DPDK
+      supported network interface drivers and must be used in conjunction with
+      the data-port configuration option to configure each bridge with an
+      appropriate DPDK enabled network device.
+  dpdk-socket-memory:
+    type: int
+    default: 1024
+    description: |
+      Amount of hugepage memory in MB to allocate per NUMA socket in deployed
+      systems.
+      .
+      Only used when DPDK is enabled.
+  dpdk-socket-cores:
+    type: int
+    default: 1
+    description: |
+      Number of cores to allocate to DPDK per NUMA socket in deployed systems.
+      .
+      Only used when DPDK is enabled.
+  dpdk-driver:
+    type: string
+    default:
+    description: |
+      Kernel userspace device driver to use for DPDK devices, valid values
+      include:
+      .
+        vfio-pci
+        uio_pci_generic
+      .
+      Only used when DPDK is enabled.
   ovn-bridge-mappings:
     type: string
     default:

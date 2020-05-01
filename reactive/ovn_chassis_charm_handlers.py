@@ -54,15 +54,11 @@ def enable_openstack():
         charm_instance.assess_status()
 
 
-@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'charm.installed')
-@reactive.when_any('config.changed.ovn-bridge-mappings',
-                   'config.changed.bridge-interface-mappings',
-                   'run-default-upgrade-charm')
+@reactive.when_not('run-default-update-status')
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'config.rendered')
 def configure_bridges():
     with charm.provide_charm_instance() as charm_instance:
         charm_instance.configure_bridges()
-        reactive.clear_flag('config.changed.ovn-bridge-mappings')
-        reactive.clear_flag('config.changed.bridge-interface-mappings')
         charm_instance.assess_status()
 
 
@@ -73,6 +69,9 @@ def configure_bridges():
 def configure_ovs():
     ovsdb = reactive.endpoint_from_flag('ovsdb.available')
     with charm.provide_charm_instance() as charm_instance:
+        if reactive.is_flag_set('config.changed.enable-dpdk'):
+            # Install required packages and/or run update-alternatives
+            charm_instance.install()
         charm_instance.configure_ovs(','.join(ovsdb.db_sb_connection_strs))
         charm_instance.render_with_interfaces(
             charm.optional_interfaces((ovsdb,),
