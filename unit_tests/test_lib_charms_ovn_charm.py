@@ -35,6 +35,12 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
             },
             'driver': 'fakedriver',
         }
+        self.patch('charmhelpers.contrib.openstack.context.SRIOVContext',
+                   name='SRIOVContext')
+        self.SRIOVContext.return_value = lambda: {
+            'eth0': 16,
+            'eth1': 32,
+        }
         self.target = ovn_charm.OVNConfigurationAdapter(
             charm_instance=self.charm_instance)
 
@@ -52,6 +58,10 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
         self.assertDictEqual(self.target.dpdk_device.devices,
                              {'fakepci': 'fakeif'})
         self.assertEquals(self.target.dpdk_device.driver, 'fakedriver')
+
+    def test_sriov_device(self):
+        self.assertDictEqual(self.target.sriov_device,
+                             {'eth0': 16, 'eth1': 32})
 
 
 class Helper(test_utils.PatchHelper):
@@ -74,6 +84,7 @@ class Helper(test_utils.PatchHelper):
         }
         self.patch_object(ovn_charm.ch_core.hookenv, 'config')
         self.config.side_effect = lambda: config or {
+            'enable-sriov': False,
             'enable-dpdk': False,
             'bridge-interface-mappings': 'br-ex:eth0'
         }
@@ -146,6 +157,7 @@ class TestDPDKOVNChassisCharm(Helper):
 
     def setUp(self):
         super().setUp(config={
+            'enable-sriov': False,
             'enable-dpdk': True,
             'dpdk-bond-mappings': ('dpdk-bond0:a0:36:9f:dd:37:a4 '
                                    'dpdk-bond0:a0:36:9f:dd:3e:9c'),
@@ -280,6 +292,7 @@ class TestOVNChassisCharm(Helper):
 
     def setUp(self):
         super().setUp(config={
+            'enable-sriov': False,
             'enable-dpdk': False,
             'bridge-interface-mappings': (
                 'br-provider:00:01:02:03:04:05 br-other:eth5'),
@@ -532,3 +545,40 @@ class TestOVNChassisCharm(Helper):
             mock.call('.', 'external_ids:ovn-cms-options',
                       'enable-chassis-as-gw'),
         ], any_order=True)
+
+
+class TestSRIOVOVNChassisCharm(Helper):
+
+    def setUp(self):
+        super().setUp(config={
+            'enable-sriov': True,
+            'enable-dpdk': False,
+            'bridge-interface-mappings': 'br-ex:eth0',
+            'ovn-bridge-mappings': 'physnet2:br-ex',
+        }, is_flag_set_return_value=True)
+
+    def test__init__(self):
+        self.assertEquals(self.target.packages, [
+            'ovn-host',
+            'sriov-netplan-shim',
+            'neutron-sriov-agent',
+            'neutron-ovn-metadata-agent',
+        ])
+        self.assertDictEqual(self.target.restart_map, {
+            '/etc/sriov-netplan-shim/interfaces.yaml': ['sriov-netplan-shim'],
+            '/etc/neutron/neutron.conf': ['neutron-sriov-agent'],
+            '/etc/neutron/plugins/ml2/sriov_agent.ini': [
+                'neutron-sriov-agent'],
+            '/etc/openvswitch/system-id.conf': [],
+            '/etc/neutron/neutron_ovn_metadata_agent.ini': [
+                'neutron-ovn-metadata-agent']
+        })
+        self.assertEquals(self.target.group, 'neutron')
+
+    def test_install(self):
+        self.patch_target('configure_source')
+        self.patch_target('run')
+        self.patch_target('update_api_ports')
+        self.target.install()
+        self.configure_source.assert_called_once_with(
+            'networking-tools-source')

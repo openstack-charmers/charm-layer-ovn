@@ -8,3 +8,6 @@ tags:
 - openstack
 - networking
 series: []
+requires:
+  amqp:
+    interface: rabbitmq
