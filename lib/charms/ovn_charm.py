@@ -409,7 +409,10 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                                     bridge['name']),
                                             level=ch_core.hookenv.DEBUG)
                         ch_ovs.del_bridge_port(bridge['name'], port['name'])
-        brdata = {'external-ids': {'charm-ovn-chassis': 'managed'}}
+        brdata = {
+            'external-ids': {'charm-ovn-chassis': 'managed'},
+            'protocols': 'OpenFlow13,OpenFlow15',
+        }
         if self.options.enable_dpdk:
             brdata.update({'datapath-type': 'netdev'})
         else:

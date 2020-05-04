@@ -236,18 +236,21 @@ class TestDPDKOVNChassisCharm(Helper):
                 brdata={
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'netdev',
+                    'protocols': 'OpenFlow13,OpenFlow15',
                 }),
             mock.call(
                 'br-data',
                 brdata={
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'netdev',
+                    'protocols': 'OpenFlow13,OpenFlow15',
                 }),
             mock.call(
                 'br-ex',
                 brdata={
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'netdev',
+                    'protocols': 'OpenFlow13,OpenFlow15',
                 }),
         ], any_order=True)
         self.add_bridge_bond.assert_called_once_with(
@@ -492,18 +495,21 @@ class TestOVNChassisCharm(Helper):
                 brdata={
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'system',
+                    'protocols': 'OpenFlow13,OpenFlow15',
                 }),
             mock.call(
                 'br-provider',
                 brdata={
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'system',
+                    'protocols': 'OpenFlow13,OpenFlow15',
                 }),
             mock.call(
                 'br-other',
                 brdata={
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'system',
+                    'protocols': 'OpenFlow13,OpenFlow15',
                 }),
         ], any_order=True)
         self.add_bridge_port.assert_has_calls([
