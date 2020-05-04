@@ -84,6 +84,7 @@ class Helper(test_utils.PatchHelper):
         }
         self.patch_object(ovn_charm.ch_core.hookenv, 'config')
         self.config.side_effect = lambda: config or {
+            'enable-hardware-offload': False,
             'enable-sriov': False,
             'enable-dpdk': False,
             'bridge-interface-mappings': 'br-ex:eth0'
@@ -157,6 +158,7 @@ class TestDPDKOVNChassisCharm(Helper):
 
     def setUp(self):
         super().setUp(config={
+            'enable-hardware-offload': False,
             'enable-sriov': False,
             'enable-dpdk': True,
             'dpdk-bond-mappings': ('dpdk-bond0:a0:36:9f:dd:37:a4 '
@@ -292,6 +294,7 @@ class TestOVNChassisCharm(Helper):
 
     def setUp(self):
         super().setUp(config={
+            'enable-hardware-offload': False,
             'enable-sriov': False,
             'enable-dpdk': False,
             'bridge-interface-mappings': (
@@ -551,6 +554,7 @@ class TestSRIOVOVNChassisCharm(Helper):
 
     def setUp(self):
         super().setUp(config={
+            'enable-hardware-offload': False,
             'enable-sriov': True,
             'enable-dpdk': False,
             'bridge-interface-mappings': 'br-ex:eth0',
@@ -582,3 +586,62 @@ class TestSRIOVOVNChassisCharm(Helper):
         self.target.install()
         self.configure_source.assert_called_once_with(
             'networking-tools-source')
+
+
+class TestHWOffloadChassisCharm(Helper):
+
+    def setUp(self):
+        super().setUp(config={
+            'enable-hardware-offload': True,
+            'enable-sriov': False,
+            'enable-dpdk': False,
+            'bridge-interface-mappings': 'br-ex:eth0',
+            'ovn-bridge-mappings': 'physnet2:br-ex',
+        })
+
+    def test__init__(self):
+        self.assertEquals(self.target.packages, [
+            'ovn-host',
+            'sriov-netplan-shim',
+            'mlnx-switchdev-mode',
+        ])
+        self.assertDictEqual(self.target.restart_map, {
+            '/etc/sriov-netplan-shim/interfaces.yaml': [
+                'sriov-netplan-shim', 'mlnx-switchdev-mode'],
+            '/etc/openvswitch/system-id.conf': [],
+        })
+        self.assertEquals(self.target.group, 'root')
+
+    def test_install(self):
+        self.patch_target('configure_source')
+        self.patch_target('run')
+        self.patch_target('update_api_ports')
+        self.target.install()
+        self.configure_source.assert_called_once_with(
+            'networking-tools-source')
+
+    def test_configure_ovs_hw_offload(self):
+        self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
+        ovsdb = mock.MagicMock()
+        ovsdb.open_vswitch.__iter__.return_value = [
+            dict([('other_config:hw-offload', 'true'),
+                  ('other_config:max-idle', '30000')]),
+        ]
+        self.SimpleOVSDB.return_value = ovsdb
+        self.assertFalse(self.target.configure_ovs_hw_offload())
+        ovsdb.open_vswitch.set.assert_not_called()
+        ovsdb.open_vswitch.__iter__.return_value = [
+            dict([('other_config:hw-offload', 'false'),
+                  ('other_config:max-idle', '30000')]),
+        ]
+        self.assertTrue(self.target.configure_ovs_hw_offload())
+        ovsdb.open_vswitch.set.assert_called_once_with(
+            '.', 'other_config:hw-offload', 'true')
+        ovsdb.open_vswitch.__iter__.return_value = [
+            dict([('other_config:hw-offload', 'true'),
+                  ('other_config:max-idle', '42')]),
+        ]
+        ovsdb.open_vswitch.set.reset_mock()
+        self.assertTrue(self.target.configure_ovs_hw_offload())
+        ovsdb.open_vswitch.set.assert_called_once_with(
+            '.', 'other_config:max-idle', '30000')

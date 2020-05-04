@@ -120,6 +120,22 @@ options:
         uio_pci_generic
       .
       Only used when DPDK is enabled.
+  enable-hardware-offload:
+    type: boolean
+    default: false
+    description: |
+      NOTE: Support for hardware offload in conjunction with OVN is a
+      experimental feature.
+      .
+      Enable support for hardware offload of flows from Open vSwitch to
+      supported network adapters.  This feature has only been tested on
+      Mellanox ConnectX 5 adapters.
+      .
+      Enabling this option will make use of the sriov-numvfs option to
+      configure the VF functions of the physical network adapters detected in
+      each unit.
+      .
+      This option must not be enabled with either enable-sriov or enable-dpdk.
   enable-sriov:
     type: boolean
     default: false
