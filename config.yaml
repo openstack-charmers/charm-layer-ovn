@@ -120,6 +120,39 @@ options:
         uio_pci_generic
       .
       Only used when DPDK is enabled.
+  enable-hardware-offload:
+    type: boolean
+    default: false
+    description: |
+      NOTE: Support for hardware offload in conjunction with OVN is a
+      experimental feature.
+      .
+      Enable support for hardware offload of flows from Open vSwitch to
+      supported network adapters.  This feature has only been tested on
+      Mellanox ConnectX 5 adapters.
+      .
+      Enabling this option will make use of the sriov-numvfs option to
+      configure the VF functions of the physical network adapters detected in
+      each unit.
+      .
+      This option must not be enabled with either enable-sriov or enable-dpdk.
+  enable-sriov:
+    type: boolean
+    default: false
+    description: |
+      Enable SR-IOV NIC agent on deployed units; use with sriov-device-mappings
+      to map SR-IOV devices to underlying provider networks. Enabling this
+      option allows instances to be plugged into directly into SR-IOV VF
+      devices connected to underlying provider networks alongside the default
+      Open vSwitch networking options.
+  networking-tools-source:
+    type: string
+    default: ppa:openstack-charmers/networking-tools
+    description: |
+      Package archive source to use for utilities associated with configuring
+      SR-IOV VF's and switchdev mode in Mellanox network adapters.
+      .
+      This PPA can be mirrored for offline deployments.
   ovn-bridge-mappings:
     type: string
     default:
@@ -149,3 +182,31 @@ options:
       NOTE: Values in this configuration option will only have effect for units
       that have a interface referenced in the `bridge-interface-mappings`
       configuration option.
+  sriov-device-mappings:
+    type: string
+    default:
+    description: |
+      Space-delimited list of SR-IOV device mappings with format
+      .
+        <provider>:<interface>
+      .
+      Multiple mappings can be provided, delimited by spaces.
+  sriov-numvfs:
+    type: string
+    default: auto
+    description: |
+      Number of VF's to configure each PF with; by default, each SR-IOV PF will
+      be configured with the maximum number of VF's it can support. In the case
+      sriov-device-mappings is set, only the devices in the mapping are configured.
+      Either use a single integer to apply the same VF configuration to all
+      detected SR-IOV devices or use a per-device configuration in the following
+      format
+      .
+        <device>:<numvfs>
+      .
+      Multiple devices can be configured by providing multi values delimited by
+      spaces.
+      .
+      NOTE: Changing this value will disrupt networking on all SR-IOV capable
+      interfaces for blanket configuration or listed interfaces when per-device
+      configuration is used.

@@ -1,6 +1,7 @@
 includes:
   - layer:openstack
   - interface:ovsdb
+  - interface:rabbitmq
 exclude: 
   - .gitignore
   - .stestr.conf
@@ -18,7 +19,6 @@ options:
 repo: https://github.com/openstack-charmers/charm-layer-ovn
 config:
   deletes:
-    - debug
     - ssl_ca
     - ssl_cert
     - ssl_key

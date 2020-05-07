@@ -33,6 +33,9 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
         ]
         hook_set = {
             'when': {
+                'amqp_connection': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'amqp.connected',),
                 'enable_chassis_reactive_code': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,),
                 'configure_ovs': (
@@ -78,6 +81,15 @@ class TestOvnHandlers(test_utils.PatchHelper):
         self.provide_charm_instance().__enter__.return_value = \
             self.charm
         self.provide_charm_instance().__exit__.return_value = None
+
+    def test_amqp_connection(self):
+        self.patch_object(handlers.reactive, 'endpoint_from_flag')
+        amqp = mock.MagicMock()
+        self.endpoint_from_flag.return_value = amqp
+        handlers.amqp_connection()
+        amqp.request_access.assert_called_once_with(
+            username='neutron', vhost='openstack')
+        self.charm.assess_status.assert_called_once_with()
 
     def test_disable_openstack(self):
         self.patch_object(handlers.reactive, 'clear_flag')

@@ -37,6 +37,15 @@ def enable_chassis_reactive_code():
     )
 
 
+# Note that RabbitMQ is only used for the Neutron SR-IOV agent
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'amqp.connected')
+def amqp_connection():
+    amqp = reactive.endpoint_from_flag('amqp.connected')
+    with charm.provide_charm_instance() as instance:
+        amqp.request_access(username='neutron', vhost='openstack')
+        instance.assess_status()
+
+
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG)
 @reactive.when_not('run-default-update-status', 'nova-compute.connected')
 def disable_openstack():
@@ -75,6 +84,7 @@ def configure_ovs():
         charm_instance.configure_ovs(','.join(ovsdb.db_sb_connection_strs))
         charm_instance.render_with_interfaces(
             charm.optional_interfaces((ovsdb,),
-                                      'nova-compute.connected'))
+                                      'nova-compute.connected',
+                                      'amqp.connected'))
         reactive.set_flag('config.rendered')
         charm_instance.assess_status()

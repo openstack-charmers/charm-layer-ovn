@@ -47,6 +47,7 @@ class OVNConfigurationAdapter(
         self._dpdk_device = self.OSContextObjectView(
             os_context.DPDKDeviceContext(
                 bridges_key=self.charm_instance.bridges_key)())
+        self._sriov_device = os_context.SRIOVContext()
 
     @property
     def ovn_key(self):
@@ -69,6 +70,10 @@ class OVNConfigurationAdapter(
     def chassis_name(self):
         return self.charm_instance.get_ovs_hostname()
 
+    @property
+    def sriov_device(self):
+        return self._sriov_device()
+
 
 class NeutronPluginRelationAdapter(
         charms_openstack.adapters.OpenStackRelationAdapter):
@@ -84,6 +89,8 @@ class OVNChassisCharmRelationAdapters(
     """Provide dictionary of relation adapters for use by OVN Chassis charms.
     """
     relation_adapters = {
+        # Note that RabbitMQ is only used for the Neutron SRIOV agent
+        'amqp': charms_openstack.adapters.RabbitMQRelationAdapter,
         'nova_compute': NeutronPluginRelationAdapter,
     }
 
@@ -138,9 +145,38 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 '/etc/dpdk/interfaces': ['dpdk'],
             })
 
+        if self.options.enable_hardware_offload or self.options.enable_sriov:
+            # The ``sriov-netplan-shim`` package does boot- and run-time
+            # configuration of Virtual Functions (VFs) in the system.
+            #
+            # NOTE: We consume the ``sriov-netplan-shim`` package both as a
+            # charm wheel for the PCI Python library parts and as a deb for
+            # the system init script and configuration tools.
+            self.packages.append('sriov-netplan-shim')
+            vf_changed_svcs = ['sriov-netplan-shim']
+            if self.options.enable_hardware_offload:
+                self.packages.append('mlnx-switchdev-mode')
+                vf_changed_svcs.append('mlnx-switchdev-mode')
+            self.restart_map.update({
+                '/etc/sriov-netplan-shim/interfaces.yaml': vf_changed_svcs,
+            })
+
         if reactive.is_flag_set('charm.ovn-chassis.enable-openstack'):
             self.enable_openstack = True
-            if self.options.enable_dpdk:
+            # When OpenStack support is enabled the various config files laid
+            # out for Neutron agents need to have group ownership of 'neutron'
+            # for the services to have access to them.
+            self.group = 'neutron'
+            if self.options.enable_sriov:
+                self.packages.append('neutron-sriov-agent')
+                self.restart_map.update({
+                    '/etc/neutron/neutron.conf': ['neutron-sriov-agent'],
+                    '/etc/neutron/plugins/ml2/sriov_agent.ini': [
+                        'neutron-sriov-agent'],
+                })
+                if 'amqp' not in self.required_relations:
+                    self.required_relations.append('amqp')
+            elif self.options.enable_dpdk:
                 # Note that we use the standard config render features of
                 # charms.openstack to just copy this file in place hence no
                 # service attached. systemd-tmpfiles-setup will take care of
@@ -152,7 +188,11 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     def install(self):
         """Extend the default install method to handle update-alternatives.
         """
+        if self.options.enable_hardware_offload or self.options.enable_sriov:
+            self.configure_source('networking-tools-source')
+
         super().install()
+
         if self.options.enable_dpdk:
             self.run('update-alternatives', '--set', 'ovs-vswitchd',
                      '/usr/lib/openvswitch-switch-dpdk/ovs-vswitchd-dpdk')
@@ -297,6 +337,27 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                         opvs.remove('.', 'other_config', k)
         return something_changed
 
+    def configure_ovs_hw_offload(self):
+        """Configure hardware offload specific bits in Open vSwitch.
+
+        :returns: Whether something changed
+        :rtype: bool
+        """
+        something_changed = False
+        opvs = ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch
+        other_config_fmt = 'other_config:{}'
+        for row in opvs:
+            for k, v in (('hw-offload', 'true'),
+                         ('max-idle', '30000'),
+                         ):
+                if row.get(other_config_fmt.format(k)) != v:
+                    something_changed = True
+                    if v:
+                        opvs.set('.', other_config_fmt.format(k), v)
+                    else:
+                        opvs.remove('.', 'other_config', k)
+        return something_changed
+
     def configure_ovs(self, sb_conn):
         """Global Open vSwitch configuration tasks.
 
@@ -357,7 +418,9 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                          'create', 'Manager', 'target="{}"'.format(target),
                          '--', 'add', 'Open_vSwitch', '.', 'manager_options',
                          '@manager')
-        if self.options.enable_dpdk:
+        if self.options.enable_hardware_offload:
+            restart_required = self.configure_ovs_hw_offload()
+        elif self.options.enable_dpdk:
             restart_required = self.configure_ovs_dpdk()
         if restart_required:
             ch_core.host.service_restart('openvswitch-switch')
