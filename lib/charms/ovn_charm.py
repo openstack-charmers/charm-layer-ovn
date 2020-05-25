@@ -231,7 +231,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             universal_newlines=True)
         ch_core.hookenv.log(cp, level=ch_core.hookenv.INFO)
 
-    def get_certificate_request(self):
+    def get_certificate_requests(self):
         """Override default certificate request handler.
 
         We make use of OVN RBAC for authorization of writes from chassis nodes
@@ -251,7 +251,11 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         tls_objects = self.get_certs_and_keys(
             certificates_interface=certificates_interface)
 
+        expected_cn = self.get_ovs_hostname()
+
         for tls_object in tls_objects:
+            if tls_object.get('cn') != expected_cn:
+                continue
             with open(self.options.ovn_ca_cert, 'w') as crt:
                 chain = tls_object.get('chain')
                 if chain:
@@ -264,6 +268,13 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 tls_object['key'],
                                 cn='host')
             break
+        else:
+            ch_core.hookenv.log('No certificate with CN matching hostname '
+                                'configured in OVS: "{}"'
+                                .format(expected_cn),
+                                level=ch_core.hookenv.INFO)
+            # Flag that we are not satisfied with the provided certificates
+            reactive.clear_flag('certificates.available')
 
     @staticmethod
     def _format_addr(addr):

@@ -318,24 +318,35 @@ class TestOVNChassisCharm(Helper):
             check=True,
             universal_newlines=True)
 
-    def test_get_certificate_request(self):
+    def test_get_certificate_requests(self):
         self.patch_target('get_ovs_hostname')
         self.get_ovs_hostname.return_value = 'fake-ovs-hostname'
         self.assertDictEqual(
-            self.target.get_certificate_request(),
+            self.target.get_certificate_requests(),
             {'fake-ovs-hostname': {'sans': []}})
 
     def test_configure_tls(self):
         self.patch_target('get_certs_and_keys')
-        self.get_certs_and_keys.return_value = [{
-            'cert': 'fakecert',
-            'key': 'fakekey',
-            'cn': 'fakecn',
-            'ca': 'fakeca',
-            'chain': 'fakechain',
-        }]
+        self.get_certs_and_keys.return_value = [
+            {
+                'cert': 'notformefakecert',
+                'key': 'notformefakekey',
+                'cn': 'notformefakecn',
+                'ca': 'notformefakeca',
+                'chain': 'notformefakechain',
+            },
+            {
+                'cert': 'fakecert',
+                'key': 'fakekey',
+                'cn': 'fakecn',
+                'ca': 'fakeca',
+                'chain': 'fakechain',
+            }
+        ]
         self.patch_target('ovn_sysconfdir')
         self.ovn_sysconfdir.return_value = '/etc/path'
+        self.patch_target('get_ovs_hostname')
+        self.get_ovs_hostname.return_value = 'fakecn'
         with mock.patch('builtins.open', create=True) as mocked_open:
             mocked_file = mock.MagicMock(spec=io.FileIO)
             mocked_open.return_value = mocked_file
