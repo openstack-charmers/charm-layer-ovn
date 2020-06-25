@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 import io
-import mock
+import unittest.mock as mock
 
 import charms_openstack.charm.core as chm_core
 import charms_openstack.test_utils as test_utils
@@ -559,6 +560,22 @@ class TestOVNChassisCharm(Helper):
             mock.call('.', 'external_ids:ovn-cms-options',
                       'enable-chassis-as-gw'),
         ], any_order=True)
+
+    def test_states_to_check(self):
+        self.maxDiff = None
+        expect = collections.OrderedDict([
+            ('certificates', [
+                ('certificates.available', 'blocked',
+                 "'certificates' missing"),
+                ('certificates.server.certs.available',
+                 'waiting',
+                 "'certificates' awaiting server certificate data")]),
+            ('ovsdb', [
+                ('ovsdb.connected', 'blocked', "'ovsdb' missing"),
+                ('ovsdb.available', 'waiting', "'ovsdb' incomplete")]),
+
+        ])
+        self.assertDictEqual(self.target.states_to_check(), expect)
 
 
 class TestSRIOVOVNChassisCharm(Helper):
