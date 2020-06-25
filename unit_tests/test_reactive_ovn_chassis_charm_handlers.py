@@ -51,8 +51,14 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'config.rendered',),
             },
-            'when_not': {
-                'disable_openstack': ('nova-compute.connected',),
+            'when_none': {
+                'amqp_connection': ('charm.paused',),
+                'disable_openstack': (
+                    'charm.paused',
+                    'nova-compute.connected',),
+                'enable_openstack': ('charm.paused',),
+                'configure_bridges': ('charm.paused',),
+                'configure_ovs': ('charm.paused',),
             },
             'when_any': {
                 'configure_bridges': (
