@@ -47,12 +47,11 @@ def amqp_connection():
 
 
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG)
-@reactive.when_not('run-default-update-status', 'nova-compute.connected')
+@reactive.when_not('nova-compute.connected')
 def disable_openstack():
     reactive.clear_flag('charm.ovn-chassis.enable-openstack')
 
 
-@reactive.when_not('run-default-update-status')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'nova-compute.connected')
 def enable_openstack():
     reactive.set_flag('charm.ovn-chassis.enable-openstack')
@@ -63,7 +62,6 @@ def enable_openstack():
         charm_instance.assess_status()
 
 
-@reactive.when_not('run-default-update-status')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'config.rendered')
 def configure_bridges():
     with charm.provide_charm_instance() as charm_instance:
@@ -71,7 +69,6 @@ def configure_bridges():
         charm_instance.assess_status()
 
 
-@reactive.when_not('run-default-update-status')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                'ovsdb.available',
                'certificates.available')

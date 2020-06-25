@@ -52,11 +52,7 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'config.rendered',),
             },
             'when_not': {
-                'disable_openstack': ('run-default-update-status',
-                                      'nova-compute.connected',),
-                'enable_openstack': ('run-default-update-status',),
-                'configure_ovs': ('run-default-update-status',),
-                'configure_bridges': ('run-default-update-status',),
+                'disable_openstack': ('nova-compute.connected',),
             },
             'when_any': {
                 'configure_bridges': (
