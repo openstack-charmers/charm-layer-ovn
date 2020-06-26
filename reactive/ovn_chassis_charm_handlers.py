@@ -38,6 +38,7 @@ def enable_chassis_reactive_code():
 
 
 # Note that RabbitMQ is only used for the Neutron SR-IOV agent
+@reactive.when_none('charm.paused')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'amqp.connected')
 def amqp_connection():
     amqp = reactive.endpoint_from_flag('amqp.connected')
@@ -46,13 +47,13 @@ def amqp_connection():
         instance.assess_status()
 
 
+@reactive.when_none('charm.paused', 'nova-compute.connected')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG)
-@reactive.when_not('run-default-update-status', 'nova-compute.connected')
 def disable_openstack():
     reactive.clear_flag('charm.ovn-chassis.enable-openstack')
 
 
-@reactive.when_not('run-default-update-status')
+@reactive.when_none('charm.paused')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'nova-compute.connected')
 def enable_openstack():
     reactive.set_flag('charm.ovn-chassis.enable-openstack')
@@ -63,7 +64,7 @@ def enable_openstack():
         charm_instance.assess_status()
 
 
-@reactive.when_not('run-default-update-status')
+@reactive.when_none('charm.paused')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'config.rendered')
 def configure_bridges():
     with charm.provide_charm_instance() as charm_instance:
@@ -71,7 +72,7 @@ def configure_bridges():
         charm_instance.assess_status()
 
 
-@reactive.when_not('run-default-update-status')
+@reactive.when_none('charm.paused')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                'ovsdb.available',
                'certificates.available')
