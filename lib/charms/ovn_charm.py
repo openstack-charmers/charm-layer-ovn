@@ -216,26 +216,28 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                      '/usr/lib/openvswitch-switch/ovs-vswitchd')
 
     def states_to_check(self, required_relations=None):
-        """Override upstream method to add custom messaging.
+        """Override parent method to add custom messaging.
 
         Note that this method will only override the messaging for certain
         relations, any relations we don't know about will get the default
         treatment from the parent method.
 
-        Please take a look at parent method for parameter and return type
-        declaration.
+        :param required_relations: Override `required_relations` class instance
+                                   variable.
+        :type required_relations: Optional[List[str]]
+        :returns: Map of relation name to flags to check presence of
+                  accompanied by status and message.
+        :rtype: collections.OrderedDict[str, List[Tuple[str, str, str]]]
         """
         # Retrieve default state map
         states_to_check = super().states_to_check(
             required_relations=required_relations)
 
-        if not states_to_check:
-            return None, None
-
+        # The parent method will always return a OrderedDict
         if CERT_RELATION in states_to_check:
-            # for certificates relation we want to replace all messaging
+            # for the certificates relation we want to replace all messaging
             states_to_check[CERT_RELATION] = [
-                # certificates relation has no connected state
+                # the certificates relation has no connected state
                 ('{}.available'.format(CERT_RELATION),
                  'blocked',
                  "'{}' missing".format(CERT_RELATION)),
