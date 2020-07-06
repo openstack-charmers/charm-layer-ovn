@@ -210,3 +210,22 @@ options:
       NOTE: Changing this value will disrupt networking on all SR-IOV capable
       interfaces for blanket configuration or listed interfaces when per-device
       configuration is used.
+  new-units-paused:
+    type: boolean
+    default: false
+    description: |
+      Start new units of the application as paused.
+      .
+      When set to 'true' newly deployed units of the application will install
+      the charm and any packages required on the sytem, but keep any services
+      from actually starting.
+      .
+      To start the services the operator must run the `resume` action on each
+      unit.
+      .
+      This is useful for use with OpenStack for controlled unit by unit
+      migration of deployments from the legacy Neutron ML2 OVS topology to the
+      OVN topology. Both topologies make use of Open vSwitch and the 'br-int'
+      integration bridge on the hypervisor and during a migration the operator
+      may want to shut down and clean up after the ML2 OVS components before
+      the `ovn-controller` takes over and reprograms the bridge flow rules.

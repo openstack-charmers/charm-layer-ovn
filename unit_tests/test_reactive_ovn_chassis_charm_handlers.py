@@ -50,6 +50,9 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'configure_bridges': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'config.rendered',),
+                'pause_unit_from_config': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'config.set.new-units-paused'),
             },
             'when_none': {
                 'amqp_connection': ('charm.paused',),
@@ -59,6 +62,7 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'enable_openstack': ('charm.paused',),
                 'configure_bridges': ('charm.paused',),
                 'configure_ovs': ('charm.paused',),
+                'pause_unit_from_config': ('charm.installed', 'charm.paused'),
             },
             'when_any': {
                 'configure_bridges': (
@@ -130,4 +134,9 @@ class TestOvnHandlers(test_utils.PatchHelper):
                                      'nova-compute.connected',
                                      'amqp.connected'))
         self.set_flag.assert_called_once_with('config.rendered')
+        self.charm.assess_status.assert_called_once_with()
+
+    def test_pause_unit_from_config(self):
+        handlers.pause_unit_from_config()
+        self.charm.pause.assert_called_once_with()
         self.charm.assess_status.assert_called_once_with()

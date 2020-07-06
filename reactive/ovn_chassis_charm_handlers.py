@@ -37,6 +37,14 @@ def enable_chassis_reactive_code():
     )
 
 
+@reactive.when_none('charm.installed', 'charm.paused')
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'config.set.new-units-paused')
+def pause_unit_from_config():
+    with charm.provide_charm_instance() as instance:
+        instance.pause()
+        instance.assess_status()
+
+
 # Note that RabbitMQ is only used for the Neutron SR-IOV agent
 @reactive.when_none('charm.paused')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'amqp.connected')
