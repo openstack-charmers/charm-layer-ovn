@@ -111,14 +111,23 @@ class TestOvnHandlers(test_utils.PatchHelper):
         self.charm.install.assert_called_once_with()
         self.charm.assess_status.assert_called_once_with()
 
-    def configure_ovs(self):
+    def test_configure_ovs(self):
         self.patch_object(handlers.reactive, 'endpoint_from_flag')
-        self.patch_object(handlers.reactive, 'clear_flag')
+        self.patch_object(handlers.charm, 'optional_interfaces')
+        self.patch_object(handlers.reactive, 'set_flag')
         ovsdb = mock.MagicMock()
+        ovsdb.db_sb_connection_strs = [
+            'ssl:192.0.2.11:6642',
+            'ssl:192.0.2.12:6642',
+            'ssl:192.0.2.13:6642',
+        ]
         self.endpoint_from_flag.return_value = ovsdb
-        self.charm.configure_ovs.assert_called_once_with(ovsdb)
+        handlers.configure_ovs()
+        self.charm.configure_ovs.assert_called_once_with(
+            ','.join(ovsdb.db_sb_connection_strs))
         self.charm.render_with_interfaces.assert_called_once_with(
-            (ovsdb),)
-        self.clear_flag.assert_called_once_with(
-            'endpoint.certificates.changed')
+            self.optional_interfaces((ovsdb,),
+                                     'nova-compute.connected',
+                                     'amqp.connected'))
+        self.set_flag.assert_called_once_with('config.rendered')
         self.charm.assess_status.assert_called_once_with()
