@@ -530,11 +530,30 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             brdata.update({'datapath-type': 'netdev'})
         else:
             brdata.update({'datapath-type': 'system'})
-        ch_ovs.add_bridge('br-int', brdata=brdata)
+        # we always update the integration bridge to make sure it has settings
+        # apropriate for the current charm configuration
+        ch_ovs.add_bridge('br-int', brdata={
+            **brdata,
+            **{
+                # for the integration bridge we want the datapath to await
+                # controller action before adding any flows. This is to avoid
+                # switching packets between isolated logical networks before
+                # `ovn-controller` starts up.
+                'fail-mode': 'secure',
+                # Suppress in-band control flows for the integration bridge,
+                # refer to ovn-architecture(7) for more details.
+                'other-config': {'disable-in-band': 'true'},
+            },
+        })
         for br in bpi:
             if br not in ovnbridges:
                 continue
-            ch_ovs.add_bridge(br, brdata=brdata)
+            ch_ovs.add_bridge(br, brdata={
+                **brdata,
+                # for bridges used for external connectivity we want the
+                # datapath to act like an ordinary MAC-learning switch.
+                **{'fail-mode': 'standalone'},
+            })
             for port in bpi[br]:
                 ifdatamap = bpi.get_ifdatamap(br, port)
                 ifdatamap = {

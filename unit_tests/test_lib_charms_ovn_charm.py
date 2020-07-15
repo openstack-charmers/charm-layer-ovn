@@ -252,6 +252,8 @@ class TestDPDKOVNChassisCharm(Helper):
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'netdev',
                     'protocols': 'OpenFlow13,OpenFlow15',
+                    'fail-mode': 'secure',
+                    'other-config': {'disable-in-band': 'true'},
                 }),
             mock.call(
                 'br-data',
@@ -259,6 +261,7 @@ class TestDPDKOVNChassisCharm(Helper):
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'netdev',
                     'protocols': 'OpenFlow13,OpenFlow15',
+                    'fail-mode': 'standalone',
                 }),
             mock.call(
                 'br-ex',
@@ -266,6 +269,7 @@ class TestDPDKOVNChassisCharm(Helper):
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'netdev',
                     'protocols': 'OpenFlow13,OpenFlow15',
+                    'fail-mode': 'standalone',
                 }),
         ], any_order=True)
         self.add_bridge_bond.assert_called_once_with(
@@ -524,6 +528,8 @@ class TestOVNChassisCharm(Helper):
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'system',
                     'protocols': 'OpenFlow13,OpenFlow15',
+                    'fail-mode': 'secure',
+                    'other-config': {'disable-in-band': 'true'},
                 }),
             mock.call(
                 'br-provider',
@@ -531,6 +537,7 @@ class TestOVNChassisCharm(Helper):
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'system',
                     'protocols': 'OpenFlow13,OpenFlow15',
+                    'fail-mode': 'standalone',
                 }),
             mock.call(
                 'br-other',
@@ -538,6 +545,7 @@ class TestOVNChassisCharm(Helper):
                     'external-ids': {'charm-ovn-chassis': 'managed'},
                     'datapath-type': 'system',
                     'protocols': 'OpenFlow13,OpenFlow15',
+                    'fail-mode': 'standalone',
                 }),
         ], any_order=True)
         self.add_bridge_port.assert_has_calls([
