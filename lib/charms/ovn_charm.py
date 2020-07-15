@@ -215,6 +215,26 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             self.run('update-alternatives', '--set', 'ovs-vswitchd',
                      '/usr/lib/openvswitch-switch/ovs-vswitchd')
 
+    def resume(self):
+        """Do full hook execution on resume.
+
+        A part of the migration strategy to OVN is to start the chassis charms
+        paused only to resume them as soon as cleanup after the previous SDN
+        has been completed.
+
+        For this to work we need to run a full hook execution on resume to make
+        sure the system is configured properly.
+        """
+        super().resume()
+
+        ch_core.hookenv.log("Re-execing as full hook execution after resume.",
+                            level=ch_core.hookenv.INFO)
+        os.execl(
+            '/usr/bin/env',
+            'python3',
+            os.path.join(ch_core.hookenv.charm_dir(), 'hooks/config-changed'),
+        )
+
     def states_to_check(self, required_relations=None):
         """Override parent method to add custom messaging.
 

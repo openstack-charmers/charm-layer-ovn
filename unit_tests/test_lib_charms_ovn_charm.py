@@ -585,6 +585,15 @@ class TestOVNChassisCharm(Helper):
         ])
         self.assertDictEqual(self.target.states_to_check(), expect)
 
+    def test_resume(self):
+        self.patch_target('run_pause_or_resume')
+        self.patch_object(ovn_charm.os, 'execl')
+        self.patch_object(ovn_charm.ch_core.hookenv, 'charm_dir')
+        self.charm_dir.return_value = '/some/path'
+        self.target.resume()
+        self.execl.assert_called_once_with(
+            '/usr/bin/env', 'python3', '/some/path/hooks/config-changed')
+
 
 class TestSRIOVOVNChassisCharm(Helper):
 
