@@ -456,6 +456,22 @@ class TestOVNChassisCharm(Helper):
                       '@manager'),
         ])
 
+    def test_render_nrpe(self):
+        self.patch_object(ovn_charm.nrpe, 'NRPE')
+        self.patch_object(ovn_charm.nrpe, 'add_init_service_checks')
+        self.target.render_nrpe()
+        self.add_init_service_checks.assert_has_calls([
+            mock.call().add_init_service_checks(
+                mock.ANY,
+                ['ovn-controller', 'ovsdb-server', 'ovs-vswitchd',
+                 'neutron-ovn-metadata-agent'],
+                mock.ANY
+            ),
+        ])
+        self.NRPE.assert_has_calls([
+            mock.call().write(),
+        ])
+
     def test_configure_bridges(self):
         self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
         dict_bpi = {

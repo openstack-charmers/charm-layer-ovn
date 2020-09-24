@@ -53,6 +53,9 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'pause_unit_from_config': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'config.set.new-units-paused'),
+                'configure_nrpe': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'config.rendered',),
             },
             'when_none': {
                 'amqp_connection': ('charm.paused',),
@@ -63,12 +66,20 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'configure_bridges': ('charm.paused',),
                 'configure_ovs': ('charm.paused',),
                 'pause_unit_from_config': ('charm.installed', 'charm.paused'),
+                'configure_nrpe': (
+                    'charm.paused',
+                    'is-update-status-hook',),
             },
             'when_any': {
                 'configure_bridges': (
                     'config.changed.ovn-bridge-mappings',
                     'config.changed.bridge-interface-mappings',
                     'run-default-upgrade-charm',),
+                'configure_nrpe': (
+                    'config.changed.nagios_context',
+                    'config.changed.nagios_servicegroups',
+                    'endpoint.nrpe-external-master.changed',
+                    'nrpe-external-master.available'),
             },
         }
         # test that the hooks were registered via the
@@ -135,6 +146,15 @@ class TestOvnHandlers(test_utils.PatchHelper):
                                      'amqp.connected'))
         self.set_flag.assert_called_once_with('config.rendered')
         self.charm.assess_status.assert_called_once_with()
+
+    def test_configure_nrpe(self):
+        self.patch_object(handlers.reactive, 'endpoint_from_flag')
+        self.endpoint_from_flag.return_value = 'nrpe-external-master'
+        self.patch_object(handlers.charm, 'provide_charm_instance')
+        handlers.configure_nrpe()
+        self.provide_charm_instance.assert_has_calls([
+            mock.call().__enter__().render_nrpe(),
+        ])
 
     def test_pause_unit_from_config(self):
         handlers.pause_unit_from_config()

@@ -2,6 +2,7 @@ includes:
   - layer:openstack
   - interface:ovsdb
   - interface:rabbitmq
+  - interface:nrpe-external-master
 exclude: 
   - .gitignore
   - .stestr.conf
