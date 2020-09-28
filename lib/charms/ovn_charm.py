@@ -116,6 +116,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
     nrpe_check_services = []
+    metadata_agent = 'neutron-ovn-metadata-agent'
 
     def __init__(self, **kwargs):
         """Allow augmenting behaviour on external factors."""
