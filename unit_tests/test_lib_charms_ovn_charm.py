@@ -135,6 +135,9 @@ class TestTrainOVNChassisCharm(Helper):
         ])
         self.assertEquals(self.target.services, [
             'ovn-host', 'networking-ovn-metadata-agent'])
+        self.assertEquals(self.target.nrpe_check_services, [
+            'ovn-host', 'ovs-vswitchd', 'ovsdb-server',
+            'networking-ovn-metadata-agent'])
 
 
 class TestUssuriOVNChassisCharm(Helper):
@@ -153,6 +156,9 @@ class TestUssuriOVNChassisCharm(Helper):
                 'neutron-ovn-metadata-agent'],
             '/etc/openvswitch/system-id.conf': [],
         })
+        self.assertEquals(self.target.nrpe_check_services, [
+            'ovn-controller', 'ovs-vswitchd', 'ovsdb-server',
+            'neutron-ovn-metadata-agent'])
 
 
 class TestDPDKOVNChassisCharm(Helper):
@@ -463,8 +469,7 @@ class TestOVNChassisCharm(Helper):
         self.add_init_service_checks.assert_has_calls([
             mock.call().add_init_service_checks(
                 mock.ANY,
-                ['ovn-controller', 'ovsdb-server', 'ovs-vswitchd',
-                 'neutron-ovn-metadata-agent'],
+                ['ovn-controller', 'ovs-vswitchd', 'ovsdb-server'],
                 mock.ANY
             ),
         ])

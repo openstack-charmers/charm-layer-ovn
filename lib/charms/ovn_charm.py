@@ -116,7 +116,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
     nrpe_check_services = []
-    metadata_agent = 'neutron-ovn-metadata-agent'
 
     def __init__(self, **kwargs):
         """Allow augmenting behaviour on external factors."""
@@ -623,8 +622,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         else:
             primary = False
         charm_nrpe = nrpe.NRPE(hostname=hostname, primary=primary)
-        if reactive.is_flag_set('nova-compute.available'):
-            self.nrpe_check_services.append(self.metadata_agent)
         nrpe.add_init_service_checks(
             charm_nrpe, self.nrpe_check_services, current_unit)
         charm_nrpe.write()
@@ -641,19 +638,20 @@ class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
     def __init__(self, **kwargs):
         """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
-        if self.enable_openstack:
-            self.metadata_agent = 'networking-ovn-metadata-agent'
-            self.packages.extend(['networking-ovn-metadata-agent', 'haproxy'])
-            self.services.append(self.metadata_agent)
-            self.restart_map.update({
-                '/etc/neutron/'
-                'networking_ovn_metadata_agent.ini': [self.metadata_agent],
-            })
         self.nrpe_check_services = [
             'ovn-host',
             'ovs-vswitchd',
             'ovsdb-server',
         ]
+        if self.enable_openstack:
+            metadata_agent = 'networking-ovn-metadata-agent'
+            self.nrpe_check_services.append(metadata_agent)
+            self.packages.extend(['networking-ovn-metadata-agent', 'haproxy'])
+            self.services.append(metadata_agent)
+            self.restart_map.update({
+                '/etc/neutron/'
+                'networking_ovn_metadata_agent.ini': [metadata_agent],
+            })
 
 
 class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
@@ -663,16 +661,17 @@ class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
     def __init__(self, **kwargs):
         """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
-        if self.enable_openstack:
-            self.metadata_agent = 'neutron-ovn-metadata-agent'
-            self.packages.extend([self.metadata_agent])
-            self.services.append(self.metadata_agent)
-            self.restart_map.update({
-                '/etc/neutron/neutron_ovn_metadata_agent.ini': [
-                    self.metadata_agent],
-            })
         self.nrpe_check_services = [
             'ovn-controller',
-            'ovsdb-server',
             'ovs-vswitchd',
+            'ovsdb-server',
         ]
+        if self.enable_openstack:
+            metadata_agent = 'neutron-ovn-metadata-agent'
+            self.nrpe_check_services.append(metadata_agent)
+            self.packages.extend([metadata_agent])
+            self.services.append(metadata_agent)
+            self.restart_map.update({
+                '/etc/neutron/neutron_ovn_metadata_agent.ini': [
+                    metadata_agent],
+            })
