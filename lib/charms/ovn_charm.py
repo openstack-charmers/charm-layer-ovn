@@ -188,6 +188,34 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 self.restart_map.update({
                     '/etc/tmpfiles.d/nova-ovs-vhost-user.conf': []})
 
+    def is_port(self, port, status_set=True):
+        """Check if the port exists.
+
+        :param port: interface name
+        :type port: str
+        :param status_set: change the juju state to blocked if
+                           the port does not exist
+        :type status_set: bool
+        :returns: boolean whether port exists
+        :rtype: bool
+        :raises: ValueError
+        """
+        ch_core.hookenv.log('checking port "{}" existence'.format(port),
+                            level=ch_core.hookenv.DEBUG)
+        try:
+            if self.options.enable_dpdk:
+                # TODO: add function to check DPDK interface
+                pass
+            else:
+                self.run('ip', 'link', 'show', port)
+        except subprocess.CalledProcessError:
+            message = 'port "{}" does not exists'.format(port)
+            ch_core.hookenv.log(message, level=ch_core.hookenv.ERROR)
+            if status_set:
+                ch_core.hookenv.status_set('blocked', message)
+            return False
+        return True
+
     def install(self):
         """Extend the default install method to handle update-alternatives.
         """
@@ -534,6 +562,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             else:
                 for port in ports.find('external_ids:charm-ovn-chassis={}'
                                        .format(bridge['name'])):
+                    if not self.is_port(port['name']):
+                        continue
                     if port['name'] not in bpi[bridge['name']]:
                         ch_core.hookenv.log('removing port "{}" from bridge '
                                             '"{}" as it is no longer present '
@@ -541,6 +571,9 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                             .format(port['name'],
                                                     bridge['name']),
                                             level=ch_core.hookenv.DEBUG)
+                        # TODO: ask if there should not be
+                        #  `linkdown=not self.options.enable_dpdk`
+                        #  and `linkdown=False` if the port does not exist
                         ch_ovs.del_bridge_port(bridge['name'], port['name'])
         brdata = {
             'external-ids': {'charm-ovn-chassis': 'managed'},
@@ -583,7 +616,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                     }
                     for port, ifdata in ifdatamap.items()
                 }
-
+                if not self.is_port(port):
+                    continue
                 if len(ifdatamap) > 1:
                     ch_ovs.add_bridge_bond(br, port, list(ifdatamap.keys()),
                                            bond_config.get_ovs_portdata(port),

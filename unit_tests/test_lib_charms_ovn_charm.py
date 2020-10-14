@@ -14,6 +14,7 @@
 
 import collections
 import io
+import subprocess
 import unittest.mock as mock
 
 import charms_openstack.charm.core as chm_core
@@ -177,7 +178,16 @@ class TestDPDKOVNChassisCharm(Helper):
             '/etc/openvswitch/system-id.conf': [],
         })
 
+    def test_is_port(self):
+        # TODO: add assertRaises after finishing function to check
+        #  DPDK interface
+        self.patch_object(ovn_charm.subprocess, 'run')
+        self.assertTrue(self.target.is_port('fake-port'))
+        # TODO: add assert after finishing function to check DPDK interface
+        self.run.assert_not_called()
+
     def test_configure_bridges(self):
+        self.patch_target('is_port', return_value=True)
         self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
         dict_bpi = {
             'br-ex': {     # bridge
@@ -311,6 +321,20 @@ class TestOVNChassisCharm(Helper):
     def test_optional_openstack_metadata(self):
         self.assertEquals(self.target.packages, ['ovn-host'])
         self.assertEquals(self.target.services, ['ovn-host'])
+
+    def test_is_port(self):
+        self.patch_object(
+            ovn_charm.subprocess, 'run',
+            side_effect=subprocess.CalledProcessError(1, 'port does not exist'))
+        self.assertFalse(self.target.is_port('fake-port'))
+        self.run.assert_called_once_with(
+            ('ip', 'link', 'show', 'fake-port'),
+            stdout=ovn_charm.subprocess.PIPE,
+            stderr=ovn_charm.subprocess.STDOUT,
+            check=True,
+            universal_newlines=True)
+        self.patch_object(ovn_charm.subprocess, 'run', side_effect=None)
+        self.assertTrue(self.target.is_port('fake-port'))
 
     def test_run(self):
         self.patch_object(ovn_charm.subprocess, 'run')
@@ -457,6 +481,7 @@ class TestOVNChassisCharm(Helper):
         ])
 
     def test_configure_bridges(self):
+        self.patch_target('is_port', return_value=True)
         self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
         dict_bpi = {
             'br-provider': {  # bridge
