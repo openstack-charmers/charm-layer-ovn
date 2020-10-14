@@ -155,6 +155,32 @@ class TestUssuriOVNChassisCharm(Helper):
             '/etc/openvswitch/system-id.conf': [],
         })
 
+    def test__add_bridge_port(self):
+        def add_invalid_bridge_port(*args, **kwargs):
+            # ovs-vsctl add-port will end up in error
+            raise subprocess.CalledProcessError(returncode=1, cmd=[])
+
+        self.patch_object(ovn_charm.ch_ovs, 'add_bridge_port')
+        self.add_bridge_port.side_effect = add_invalid_bridge_port
+        self.target._add_bridge_port('br-ex', 'invalid-port', {}, {})
+        self.assertEqual(self.target.failed_ports, ['invalid-port'])
+
+    def test__del_bridge_port(self):
+        def del_invalid_bridge_port(bridge, port, linkdown=True):
+            # ovs-vsctl del-port is run with flag --if-exists,
+            # which will not end up in error
+            if linkdown:
+                subprocess.check_call(["ip", "link", "set", port, "down"])
+
+        self.patch_object(ovn_charm.ch_ovs, 'del_bridge_port')
+        self.del_bridge_port.side_effect = del_invalid_bridge_port
+        self.target._del_bridge_port('br-ex', 'invalid-port')
+        self.del_bridge_port.assert_has_calls([
+            mock.call('br-ex', 'invalid-port'),
+            mock.call('br-ex', 'invalid-port', linkdown=False)],
+            any_order=False,
+        )
+
 
 class TestDPDKOVNChassisCharm(Helper):
 
@@ -178,16 +204,7 @@ class TestDPDKOVNChassisCharm(Helper):
             '/etc/openvswitch/system-id.conf': [],
         })
 
-    def test_is_port(self):
-        # TODO: add assertRaises after finishing function to check
-        #  DPDK interface
-        self.patch_object(ovn_charm.subprocess, 'run')
-        self.assertTrue(self.target.is_port('fake-port'))
-        # TODO: add assert after finishing function to check DPDK interface
-        self.run.assert_not_called()
-
     def test_configure_bridges(self):
-        self.patch_target('is_port', return_value=True)
         self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
         dict_bpi = {
             'br-ex': {     # bridge
@@ -283,7 +300,8 @@ class TestDPDKOVNChassisCharm(Helper):
                 }),
         ], any_order=True)
         self.add_bridge_bond.assert_called_once_with(
-            'br-data', 'dpdk-xxx', ['if0', 'if1'], 'fakebondconfig', {
+            'br-data', 'dpdk-xxx', ['if0', 'if1'], portdata='fakebondconfig',
+            ifdatamap={
                 'if0': {
                     'fake': 'data',
                     'external-ids': {'charm-ovn-chassis': 'br-data'}},
@@ -321,20 +339,6 @@ class TestOVNChassisCharm(Helper):
     def test_optional_openstack_metadata(self):
         self.assertEquals(self.target.packages, ['ovn-host'])
         self.assertEquals(self.target.services, ['ovn-host'])
-
-    def test_is_port(self):
-        self.patch_object(
-            ovn_charm.subprocess, 'run',
-            side_effect=subprocess.CalledProcessError(1, 'port does not exist'))
-        self.assertFalse(self.target.is_port('fake-port'))
-        self.run.assert_called_once_with(
-            ('ip', 'link', 'show', 'fake-port'),
-            stdout=ovn_charm.subprocess.PIPE,
-            stderr=ovn_charm.subprocess.STDOUT,
-            check=True,
-            universal_newlines=True)
-        self.patch_object(ovn_charm.subprocess, 'run', side_effect=None)
-        self.assertTrue(self.target.is_port('fake-port'))
 
     def test_run(self):
         self.patch_object(ovn_charm.subprocess, 'run')
@@ -481,7 +485,6 @@ class TestOVNChassisCharm(Helper):
         ])
 
     def test_configure_bridges(self):
-        self.patch_target('is_port', return_value=True)
         self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
         dict_bpi = {
             'br-provider': {  # bridge

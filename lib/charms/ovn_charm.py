@@ -114,6 +114,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     python_version = 3
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
+    failed_ports = []
 
     def __init__(self, **kwargs):
         """Allow augmenting behaviour on external factors."""
@@ -188,34 +189,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 self.restart_map.update({
                     '/etc/tmpfiles.d/nova-ovs-vhost-user.conf': []})
 
-    def is_port(self, port, status_set=True):
-        """Check if the port exists.
-
-        :param port: interface name
-        :type port: str
-        :param status_set: change the juju state to blocked if
-                           the port does not exist
-        :type status_set: bool
-        :returns: boolean whether port exists
-        :rtype: bool
-        :raises: ValueError
-        """
-        ch_core.hookenv.log('checking port "{}" existence'.format(port),
-                            level=ch_core.hookenv.DEBUG)
-        try:
-            if self.options.enable_dpdk:
-                # TODO: add function to check DPDK interface
-                pass
-            else:
-                self.run('ip', 'link', 'show', port)
-        except subprocess.CalledProcessError:
-            message = 'port "{}" does not exists'.format(port)
-            ch_core.hookenv.log(message, level=ch_core.hookenv.ERROR)
-            if status_set:
-                ch_core.hookenv.status_set('blocked', message)
-            return False
-        return True
-
     def install(self):
         """Extend the default install method to handle update-alternatives.
         """
@@ -262,6 +235,22 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             'python3',
             os.path.join(ch_core.hookenv.charm_dir(), 'hooks/config-changed'),
         )
+
+    def custom_assess_status_last_check(self):
+        """Override parent method to add custom messaging.
+
+        This method checks for a failure when adding ports, and if so,
+        puts the Unit in a blocked state.
+
+        :returns: Return (state, message) to set the status to
+                  blocked state if there are any failed ports.
+        :rtype: Tuple[str, str]
+        """
+        if len(self.failed_ports) > 0:
+            return ('blocked',
+                    'failure to add ports: {}'.format(
+                        ', '.join(self.failed_ports)))
+        return None, None
 
     def states_to_check(self, required_relations=None):
         """Override parent method to add custom messaging.
@@ -523,6 +512,38 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         if restart_required:
             ch_core.host.service_restart('openvswitch-switch')
 
+    def _add_bridge_port(self, bridge, port, ifdatamap, portdata):
+        """Add Open vSwitch bridge port and interface."""
+        try:
+            if len(ifdatamap) > 1:
+                ch_ovs.add_bridge_bond(bridge, port, list(ifdatamap.keys()),
+                                       portdata=portdata,
+                                       ifdatamap=ifdatamap)
+            else:
+                ch_ovs.add_bridge_port(bridge, port,
+                                       ifdata=ifdatamap.get(port, {}),
+                                       linkup=not self.options.enable_dpdk,
+                                       promisc=None,
+                                       portdata={
+                                           'external-ids': {
+                                               'charm-ovn-chassis': bridge}})
+        except subprocess.CalledProcessError:
+            ch_core.hookenv.log(
+                'removing port "{}" from bridge "{}" failed'.format(port,
+                                                                    bridge),
+                level=ch_core.hookenv.ERROR)
+            self.failed_ports.append(port)
+
+    def _del_bridge_port(self, bridge, port):
+        """Delete Open vSwitch bridge port and interface."""
+        ch_core.hookenv.log('removing port "{}" from bridge "{}" as it is no '
+                            'longer present in configuration for this unit.'
+                            .format(port, bridge), level=ch_core.hookenv.DEBUG)
+        try:
+            ch_ovs.del_bridge_port(bridge, port)
+        except subprocess.CalledProcessError:
+            ch_ovs.del_bridge_port(bridge, port, linkdown=False)
+
     def configure_bridges(self):
         """Configure Open vSwitch bridges ports and interfaces."""
         if self.check_if_paused() != (None, None):
@@ -562,19 +583,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             else:
                 for port in ports.find('external_ids:charm-ovn-chassis={}'
                                        .format(bridge['name'])):
-                    if not self.is_port(port['name']):
-                        continue
                     if port['name'] not in bpi[bridge['name']]:
-                        ch_core.hookenv.log('removing port "{}" from bridge '
-                                            '"{}" as it is no longer present '
-                                            'in configuration for this unit.'
-                                            .format(port['name'],
-                                                    bridge['name']),
-                                            level=ch_core.hookenv.DEBUG)
-                        # TODO: ask if there should not be
-                        #  `linkdown=not self.options.enable_dpdk`
-                        #  and `linkdown=False` if the port does not exist
-                        ch_ovs.del_bridge_port(bridge['name'], port['name'])
+                        self._del_bridge_port(bridge['name'], port['name'])
         brdata = {
             'external-ids': {'charm-ovn-chassis': 'managed'},
             'protocols': 'OpenFlow13,OpenFlow15',
@@ -598,38 +608,26 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 'other-config': {'disable-in-band': 'true'},
             },
         })
-        for br in bpi:
-            if br not in ovnbridges:
+        for bridge in bpi:
+            if bridge not in ovnbridges:
                 continue
-            ch_ovs.add_bridge(br, brdata={
+            ch_ovs.add_bridge(bridge, brdata={
                 **brdata,
                 # for bridges used for external connectivity we want the
                 # datapath to act like an ordinary MAC-learning switch.
                 **{'fail-mode': 'standalone'},
             })
-            for port in bpi[br]:
-                ifdatamap = bpi.get_ifdatamap(br, port)
+            for port in bpi[bridge]:
+                ifdatamap = bpi.get_ifdatamap(bridge, port)
                 ifdatamap = {
                     port: {
                         **ifdata,
-                        **{'external-ids': {'charm-ovn-chassis': br}},
+                        **{'external-ids': {'charm-ovn-chassis': bridge}},
                     }
                     for port, ifdata in ifdatamap.items()
                 }
-                if not self.is_port(port):
-                    continue
-                if len(ifdatamap) > 1:
-                    ch_ovs.add_bridge_bond(br, port, list(ifdatamap.keys()),
-                                           bond_config.get_ovs_portdata(port),
-                                           ifdatamap)
-                else:
-                    ch_ovs.add_bridge_port(br, port,
-                                           ifdata=ifdatamap.get(port, {}),
-                                           linkup=not self.options.enable_dpdk,
-                                           promisc=None,
-                                           portdata={
-                                               'external-ids': {
-                                                   'charm-ovn-chassis': br}})
+                self._add_bridge_port(bridge, port, ifdatamap,
+                                      bond_config.get_ovs_portdata(port))
 
         opvs = ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch
         if ovn_br_map_str:
