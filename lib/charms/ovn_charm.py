@@ -311,6 +311,14 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         # The default handler in ``OpenStackCharm`` class does the CA only
         tls_objects = self.get_certs_and_keys(
             certificates_interface=certificates_interface)
+        if not tls_objects:
+            # We have no configuration settings ssl_* nor a certificates
+            # relation to vault.
+            # Avoid LP Bug#1900457
+            ch_core.hookenv.log(
+                'No TLS objects available yet. Deferring TLS processing',
+                level=ch_core.hookenv.DEBUG)
+            return
 
         expected_cn = self.get_ovs_hostname()
 

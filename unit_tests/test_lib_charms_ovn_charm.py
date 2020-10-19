@@ -374,6 +374,13 @@ class TestOVNChassisCharm(Helper):
                 'fakekey',
                 cn='host')
 
+    def test_configure_tls_not_ready(self):
+        self.patch_target('get_certs_and_keys')
+        self.get_certs_and_keys.return_value = None
+        self.target.configure_cert = mock.MagicMock()
+        self.target.configure_tls()
+        self.target.configure_cert.assert_not_called()
+
     def test__format_addr(self):
         self.assertEquals('1.2.3.4', self.target._format_addr('1.2.3.4'))
         self.assertEquals(
