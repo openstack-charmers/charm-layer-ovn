@@ -472,6 +472,10 @@ class TestOVNChassisCharm(Helper):
     def test_render_nrpe(self):
         self.patch_object(ovn_charm.nrpe, 'NRPE')
         self.patch_object(ovn_charm.nrpe, 'add_init_service_checks')
+        self.patch_object(ovn_charm.nrpe, 'add_check')
+        self.patch_object(ovn_charm.shutil, 'copy')
+        self.patch_object(ovn_charm.os, 'chmod')
+        self.patch_object(ovn_charm.os, 'chown')
         self.target.render_nrpe()
         self.add_init_service_checks.assert_has_calls([
             mock.call().add_init_service_checks(
@@ -481,8 +485,16 @@ class TestOVNChassisCharm(Helper):
             ),
         ])
         self.NRPE.assert_has_calls([
+            mock.call().add_check('ovn_controller_state',
+                                  'OVN chassis controller status',
+                                  'check_ovn_status.py --controller'),
             mock.call().write(),
         ])
+        self.copy.assert_has_calls([
+            mock.call('/tmp/files/ovn-central-ovn-sudoers', '/etc/sudoers.d'),
+            mock.call('/tmp/files/check_ovn_status.py',
+                      '/usr/local/lib/nagios/plugins'),
+        ], any_order=True)
 
     def test_configure_bridges(self):
         self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
