@@ -19,6 +19,7 @@ import subprocess
 import charms.reactive as reactive
 
 import charmhelpers.core as ch_core
+import charmhelpers.contrib.charmsupport.nrpe as nrpe
 import charmhelpers.contrib.openstack.context as os_context
 import charmhelpers.contrib.network.ovs as ch_ovs
 import charmhelpers.contrib.network.ovs.ovsdb as ch_ovsdb
@@ -115,6 +116,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
     failed_ports = []
+    nrpe_check_services = []
 
     def __init__(self, **kwargs):
         """Allow augmenting behaviour on external factors."""
@@ -326,6 +328,14 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         # The default handler in ``OpenStackCharm`` class does the CA only
         tls_objects = self.get_certs_and_keys(
             certificates_interface=certificates_interface)
+        if not tls_objects:
+            # We have no configuration settings ssl_* nor a certificates
+            # relation to vault.
+            # Avoid LP Bug#1900457
+            ch_core.hookenv.log(
+                'No TLS objects available yet. Deferring TLS processing',
+                level=ch_core.hookenv.DEBUG)
+            return
 
         expected_cn = self.get_ovs_hostname()
 
@@ -640,6 +650,22 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             # NOTE(fnordahl): Workaround for LP: #1848757
             opvs.remove('.', 'external_ids', 'ovn-cms-options')
 
+    def render_nrpe(self):
+        """Configure Nagios NRPE checks."""
+        ch_core.hookenv.log("Rendering NRPE checks.",
+                            level=ch_core.hookenv.INFO)
+        hostname = nrpe.get_nagios_hostname()
+        current_unit = nrpe.get_nagios_unit_name()
+        # Determine if this is a subordinate unit or not
+        if ch_core.hookenv.principal_unit() == ch_core.hookenv.local_unit():
+            primary = True
+        else:
+            primary = False
+        charm_nrpe = nrpe.NRPE(hostname=hostname, primary=primary)
+        nrpe.add_init_service_checks(
+            charm_nrpe, self.nrpe_check_services, current_unit)
+        charm_nrpe.write()
+
 
 class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
     """Train incarnation of the OVN Chassis base charm class."""
@@ -652,8 +678,14 @@ class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
     def __init__(self, **kwargs):
         """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
+        self.nrpe_check_services = [
+            'ovn-host',
+            'ovs-vswitchd',
+            'ovsdb-server',
+        ]
         if self.enable_openstack:
             metadata_agent = 'networking-ovn-metadata-agent'
+            self.nrpe_check_services.append(metadata_agent)
             self.packages.extend(['networking-ovn-metadata-agent', 'haproxy'])
             self.services.append(metadata_agent)
             self.restart_map.update({
@@ -669,8 +701,14 @@ class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
     def __init__(self, **kwargs):
         """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
+        self.nrpe_check_services = [
+            'ovn-controller',
+            'ovs-vswitchd',
+            'ovsdb-server',
+        ]
         if self.enable_openstack:
             metadata_agent = 'neutron-ovn-metadata-agent'
+            self.nrpe_check_services.append(metadata_agent)
             self.packages.extend([metadata_agent])
             self.services.append(metadata_agent)
             self.restart_map.update({
