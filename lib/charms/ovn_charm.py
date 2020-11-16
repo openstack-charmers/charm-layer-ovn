@@ -104,8 +104,9 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     abstract_class = True
     package_codenames = {
         'ovn-host': collections.OrderedDict([
-            ('2', 'train'),
-            ('20', 'ussuri'),
+            ('2.12', 'train'),
+            ('20.03', 'ussuri'),
+            ('20.06', 'victoria'),
         ]),
     }
     release_pkg = 'ovn-host'
