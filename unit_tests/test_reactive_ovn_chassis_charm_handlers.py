@@ -58,13 +58,16 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'config.rendered',),
             },
             'when_none': {
-                'amqp_connection': ('charm.paused',),
+                'amqp_connection': ('charm.paused', 'is-update-status-hook'),
                 'disable_openstack': (
                     'charm.paused',
+                    'is-update-status-hook',
                     'nova-compute.connected',),
-                'enable_openstack': ('charm.paused',),
-                'configure_bridges': ('charm.paused',),
-                'configure_ovs': ('charm.paused',),
+                'enable_openstack': ('charm.paused', 'is-update-status-hook'),
+                'configure_bridges': (
+                    'charm.paused',
+                    'is-update-status-hook'),
+                'configure_ovs': ('charm.paused', 'is-update-status-hook'),
                 'pause_unit_from_config': ('charm.installed', 'charm.paused'),
                 'configure_nrpe': (
                     'charm.paused',
