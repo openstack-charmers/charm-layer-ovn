@@ -102,6 +102,9 @@ options:
       systems.
       .
       Only used when DPDK is enabled.
+      NOTE: Please check that the value set here is large enough to accomadate the MTU
+      size being used. For more information please refer to
+      https://docs.openvswitch.org/en/latest/topics/dpdk/memory/#shared-memory-calculations
   dpdk-socket-cores:
     type: int
     default: 1
