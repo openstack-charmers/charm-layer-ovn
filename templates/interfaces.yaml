@@ -1,5 +1,7 @@
 interfaces:
-  {% for interface, numvfs in options.sriov_device.items() -%}
-  {{ interface }}:
-    num_vfs: {{ numvfs }}
+  {% for _, pcidnvfs in options.sriov_device.get_map.items() -%}
+  {{ pcidnvfs.device.interface_name }}:
+    match:
+      pciaddress: {{ pcidnvfs.device.pci_address }}
+    num_vfs: {{ pcidnvfs.numvfs }}
   {% endfor -%}

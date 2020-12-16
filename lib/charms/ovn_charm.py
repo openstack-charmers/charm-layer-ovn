@@ -76,7 +76,7 @@ class OVNConfigurationAdapter(
 
     @property
     def sriov_device(self):
-        return self._sriov_device()
+        return self._sriov_device
 
 
 class NeutronPluginRelationAdapter(
@@ -151,19 +151,21 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             })
 
         if self.options.enable_hardware_offload or self.options.enable_sriov:
-            # The ``sriov-netplan-shim`` package does boot- and run-time
+            # The ``sriov-netplan-shim`` package does boot-time
             # configuration of Virtual Functions (VFs) in the system.
+            #
+            # The charm does not do run-time configuration of VFs as this
+            # would be detrimental to any instances consuming the VFs. In some
+            # configurations it would also break NIC firmware LP: #1908351.
             #
             # NOTE: We consume the ``sriov-netplan-shim`` package both as a
             # charm wheel for the PCI Python library parts and as a deb for
             # the system init script and configuration tools.
             self.packages.append('sriov-netplan-shim')
-            vf_changed_svcs = ['sriov-netplan-shim']
             if self.options.enable_hardware_offload:
                 self.packages.append('mlnx-switchdev-mode')
-                vf_changed_svcs.append('mlnx-switchdev-mode')
             self.restart_map.update({
-                '/etc/sriov-netplan-shim/interfaces.yaml': vf_changed_svcs,
+                '/etc/sriov-netplan-shim/interfaces.yaml': [],
             })
 
         if reactive.is_flag_set('charm.ovn-chassis.enable-openstack'):

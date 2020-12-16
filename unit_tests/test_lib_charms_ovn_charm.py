@@ -38,10 +38,6 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
         }
         self.patch('charmhelpers.contrib.openstack.context.SRIOVContext',
                    name='SRIOVContext')
-        self.SRIOVContext.return_value = lambda: {
-            'eth0': 16,
-            'eth1': 32,
-        }
         self.target = ovn_charm.OVNConfigurationAdapter(
             charm_instance=self.charm_instance)
 
@@ -61,8 +57,7 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
         self.assertEquals(self.target.dpdk_device.driver, 'fakedriver')
 
     def test_sriov_device(self):
-        self.assertDictEqual(self.target.sriov_device,
-                             {'eth0': 16, 'eth1': 32})
+        self.assertEquals(self.target.sriov_device, self.SRIOVContext())
 
 
 class Helper(test_utils.PatchHelper):
@@ -642,7 +637,7 @@ class TestSRIOVOVNChassisCharm(Helper):
             'neutron-ovn-metadata-agent',
         ])
         self.assertDictEqual(self.target.restart_map, {
-            '/etc/sriov-netplan-shim/interfaces.yaml': ['sriov-netplan-shim'],
+            '/etc/sriov-netplan-shim/interfaces.yaml': [],
             '/etc/neutron/neutron.conf': ['neutron-sriov-agent'],
             '/etc/neutron/plugins/ml2/sriov_agent.ini': [
                 'neutron-sriov-agent'],
@@ -679,8 +674,7 @@ class TestHWOffloadChassisCharm(Helper):
             'mlnx-switchdev-mode',
         ])
         self.assertDictEqual(self.target.restart_map, {
-            '/etc/sriov-netplan-shim/interfaces.yaml': [
-                'sriov-netplan-shim', 'mlnx-switchdev-mode'],
+            '/etc/sriov-netplan-shim/interfaces.yaml': [],
             '/etc/openvswitch/system-id.conf': [],
         })
         self.assertEquals(self.target.group, 'root')
