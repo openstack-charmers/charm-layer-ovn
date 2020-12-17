@@ -127,7 +127,7 @@ options:
     type: boolean
     default: false
     description: |
-      NOTE: Support for hardware offload in conjunction with OVN is a
+      NOTE: Support for hardware offload in conjunction with OVN is an
       experimental feature.
       .
       Enable support for hardware offload of flows from Open vSwitch to
@@ -139,6 +139,10 @@ options:
       each unit.
       .
       This option must not be enabled with either enable-sriov or enable-dpdk.
+      .
+      NOTE: Changing this value will not perform hardware specific adaption. A
+      manual restart of the hardware specific adaption service or reboot of the
+      system is required to apply configuration.
   enable-sriov:
     type: boolean
     default: false
@@ -210,9 +214,9 @@ options:
       Multiple devices can be configured by providing multi values delimited by
       spaces.
       .
-      NOTE: Changing this value will disrupt networking on all SR-IOV capable
-      interfaces for blanket configuration or listed interfaces when per-device
-      configuration is used.
+      NOTE: Changing this value will have no effect on runtime configuration. A
+      manual restart of the `sriov-netplan-shim` service or reboot of the
+      system is required to apply configuration.
   new-units-paused:
     type: boolean
     default: false
