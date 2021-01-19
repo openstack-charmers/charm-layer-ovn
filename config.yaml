@@ -250,3 +250,20 @@ options:
     type: string
     description: |
       Comma separated list of nagios servicegroups for the service checks.
+  disable-mlockall:
+    type: boolean
+    default:
+    description: |
+      Disable Open vSwitch use of mlockall().
+      .
+      When mlockall() is enabled, all of ovs-vswitchd's process memory is
+      locked into physical RAM and prevented from paging. This avoids network
+      interruptions but can lead to memory exhaustion in memory-constrained
+      environments.
+      .
+      By default, the charm will disable mlockall() if it is running in a
+      container. Otherwise, the charm will default to mlockall() enabled if
+      it is not running in a container.
+      .
+      Changing this config option will restart openvswitch-switch, resulting
+      in an expected data plane outage while the service restarts.

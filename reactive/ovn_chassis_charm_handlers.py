@@ -91,7 +91,9 @@ def configure_ovs():
         if reactive.is_flag_set('config.changed.enable-dpdk'):
             # Install required packages and/or run update-alternatives
             charm_instance.install()
-        charm_instance.configure_ovs(','.join(ovsdb.db_sb_connection_strs))
+        charm_instance.configure_ovs(
+            ','.join(ovsdb.db_sb_connection_strs),
+            reactive.is_flag_set('config.changed.disable-mlockall'))
         charm_instance.render_with_interfaces(
             charm.optional_interfaces((ovsdb,),
                                       'nova-compute.connected',
