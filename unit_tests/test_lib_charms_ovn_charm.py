@@ -59,6 +59,26 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
     def test_sriov_device(self):
         self.assertEquals(self.target.sriov_device, self.SRIOVContext())
 
+    def _test_mlock_d(self, config_rv, container_rv, mlock_rv):
+        hookenv = ovn_charm.ch_core.hookenv
+        host = ovn_charm.ch_core.host
+
+        self.patch_object(hookenv, 'config', return_value=config_rv)
+        self.patch_object(host, 'is_container', return_value=container_rv)
+        self.assertEquals(self.target.mlockall_disabled, mlock_rv)
+
+    def test_mlockall_disabled_true(self):
+        self._test_mlock_d(config_rv=True, container_rv=False, mlock_rv=True)
+
+    def test_mlockall_disabled_false(self):
+        self._test_mlock_d(config_rv=False, container_rv=False, mlock_rv=False)
+
+    def test_mlockall_disabled_none_true(self):
+        self._test_mlock_d(config_rv=None, container_rv=True, mlock_rv=True)
+
+    def test_mlockall_disabled_none_false(self):
+        self._test_mlock_d(config_rv=None, container_rv=False, mlock_rv=False)
+
 
 class Helper(test_utils.PatchHelper):
 
@@ -147,6 +167,7 @@ class TestUssuriOVNChassisCharm(Helper):
         self.assertEquals(self.target.services, [
             'ovn-host', 'neutron-ovn-metadata-agent'])
         self.assertDictEqual(self.target.restart_map, {
+            '/etc/default/openvswitch-switch': ['openvswitch-switch'],
             '/etc/neutron/neutron_ovn_metadata_agent.ini': [
                 'neutron-ovn-metadata-agent'],
             '/etc/openvswitch/system-id.conf': [],
@@ -174,6 +195,7 @@ class TestDPDKOVNChassisCharm(Helper):
         self.assertEquals(self.target.packages, [
             'ovn-host', 'openvswitch-switch-dpdk'])
         self.assertDictEqual(self.target.restart_map, {
+            '/etc/default/openvswitch-switch': ['openvswitch-switch'],
             '/etc/dpdk/interfaces': ['dpdk'],
             '/etc/openvswitch/system-id.conf': [],
         })
@@ -423,10 +445,10 @@ class TestOVNChassisCharm(Helper):
         self.get_ovs_hostname.return_value = 'fake-ovs-hostname'
         self.patch_target('check_if_paused')
         self.check_if_paused.return_value = ('some', 'reason')
-        self.target.configure_ovs('fake-sb-conn-str')
+        self.target.configure_ovs('fake-sb-conn-str', True)
         self.run.assert_not_called()
         self.check_if_paused.return_value = (None, None)
-        self.target.configure_ovs('fake-sb-conn-str')
+        self.target.configure_ovs('fake-sb-conn-str', False)
         self.run.assert_has_calls([
             mock.call('ovs-vsctl', '--no-wait', 'set-ssl',
                       mock.ANY, mock.ANY, mock.ANY),
@@ -444,7 +466,7 @@ class TestOVNChassisCharm(Helper):
         self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
         managers = mock.MagicMock()
         self.SimpleOVSDB.return_value = managers
-        self.target.configure_ovs('fake-sb-conn-str')
+        self.target.configure_ovs('fake-sb-conn-str', True)
         managers.manager.find.assert_called_once_with(
             'target="ptcp:6640:127.0.0.1"')
         self.run.assert_has_calls([
@@ -638,6 +660,7 @@ class TestSRIOVOVNChassisCharm(Helper):
         ])
         self.assertDictEqual(self.target.restart_map, {
             '/etc/sriov-netplan-shim/interfaces.yaml': [],
+            '/etc/default/openvswitch-switch': ['openvswitch-switch'],
             '/etc/neutron/neutron.conf': ['neutron-sriov-agent'],
             '/etc/neutron/plugins/ml2/sriov_agent.ini': [
                 'neutron-sriov-agent'],
@@ -675,6 +698,7 @@ class TestHWOffloadChassisCharm(Helper):
         ])
         self.assertDictEqual(self.target.restart_map, {
             '/etc/sriov-netplan-shim/interfaces.yaml': [],
+            '/etc/default/openvswitch-switch': ['openvswitch-switch'],
             '/etc/openvswitch/system-id.conf': [],
         })
         self.assertEquals(self.target.group, 'root')
