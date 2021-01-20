@@ -115,41 +115,20 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     python_version = 3
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
-    nrpe_check_services = []
 
-    def __init__(self, **kwargs):
-        """Allow augmenting behaviour on external factors."""
-        super().__init__(**kwargs)
-        # NOTE: we must initialize the packages and services variables as
-        # instance variables as we are extending them in the release
-        # specialized class instances and can not rely on class variables.
-        self.packages = ['ovn-host']
-        self.services = ['ovn-host']
-        # Note that we use the standard config render features of
-        # charms.openstack to just copy this file in place hence no
-        # service attached.
-        #
-        # The charm will configure the system-id at runtime in the
-        # ``configure_ovs`` method.  The openvswitch-switch init script will
-        # use the on-disk file on service restart.
-        self.restart_map = {
-            '/etc/openvswitch/system-id.conf': [],
-        }
+    @property
+    def nrpe_check_services(self):
+        return []
 
+    @property
+    def enable_openstack(self):
+        return reactive.is_flag_set('charm.ovn-chassis.enable-openstack')
+
+    @property
+    def packages(self):
+        _packages = ['ovn-host']
         if self.options.enable_dpdk:
-            self.packages.extend(['openvswitch-switch-dpdk'])
-            # The ``dpdk`` system init script takes care of binding devices
-            # to the driver specified in configuration at run- and boot- time.
-            #
-            # NOTE: we must take care to perform device lookup and store
-            # mapping information in the system before binding the interfaces
-            # as important information such as hardware ethernet address (MAC)
-            # will be harder to get at once bound. (The device disappears from
-            # sysfs)
-            self.restart_map.update({
-                '/etc/dpdk/interfaces': ['dpdk'],
-            })
-
+            _packages.extend(['openvswitch-switch-dpdk'])
         if self.options.enable_hardware_offload or self.options.enable_sriov:
             # The ``sriov-netplan-shim`` package does boot-time
             # configuration of Virtual Functions (VFs) in the system.
@@ -161,36 +140,78 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             # NOTE: We consume the ``sriov-netplan-shim`` package both as a
             # charm wheel for the PCI Python library parts and as a deb for
             # the system init script and configuration tools.
-            self.packages.append('sriov-netplan-shim')
+            _packages.append('sriov-netplan-shim')
             if self.options.enable_hardware_offload:
-                self.packages.append('mlnx-switchdev-mode')
-            self.restart_map.update({
+                _packages.append('mlnx-switchdev-mode')
+        if self.enable_openstack:
+            if self.options.enable_sriov:
+                _packages.append('neutron-sriov-agent')
+        return _packages
+
+    @property
+    def group(self):
+        # When OpenStack support is enabled the various config files laid
+        # out for Neutron agents need to have group ownership of 'neutron'
+        # for the services to have access to them.
+        if self.enable_openstack:
+            return 'neutron'
+        else:
+            return 'root'
+
+    @property
+    def services(self):
+        _services = ['ovn-host']
+        return _services
+
+    @property
+    def restart_map(self):
+        # Note that we use the standard config render features of
+        # charms.openstack to just copy this file in place hence no
+        # service attached.
+        # The charm will configure the system-id at runtime in the
+        # ``configure_ovs`` method.  The openvswitch-switch init script will
+        # use the on-disk file on service restart.
+        _restart_map = {
+            '/etc/openvswitch/system-id.conf': []}
+        # The ``dpdk`` system init script takes care of binding devices
+        # to the driver specified in configuration at run- and boot- time.
+        #
+        # NOTE: we must take care to perform device lookup and store
+        # mapping information in the system before binding the interfaces
+        # as important information such as hardware ethernet address (MAC)
+        # will be harder to get at once bound. (The device disappears from
+        # sysfs)
+        if self.options.enable_dpdk:
+            _restart_map.update({
+                '/etc/dpdk/interfaces': ['dpdk']})
+        if self.options.enable_hardware_offload or self.options.enable_sriov:
+            _restart_map.update({
                 '/etc/sriov-netplan-shim/interfaces.yaml': [],
             })
-
-        if reactive.is_flag_set('charm.ovn-chassis.enable-openstack'):
-            self.enable_openstack = True
-            # When OpenStack support is enabled the various config files laid
-            # out for Neutron agents need to have group ownership of 'neutron'
-            # for the services to have access to them.
-            self.group = 'neutron'
+        if self.enable_openstack:
             if self.options.enable_sriov:
-                self.packages.append('neutron-sriov-agent')
-                self.restart_map.update({
+                _restart_map.update({
                     '/etc/neutron/neutron.conf': ['neutron-sriov-agent'],
                     '/etc/neutron/plugins/ml2/sriov_agent.ini': [
                         'neutron-sriov-agent'],
                 })
-                if 'amqp' not in self.required_relations:
-                    self.required_relations.append('amqp')
             elif self.options.enable_dpdk:
                 # Note that we use the standard config render features of
                 # charms.openstack to just copy this file in place hence no
                 # service attached. systemd-tmpfiles-setup will take care of
                 # it at boot and we will do a first-time initialization in the
                 # ``install`` method.
-                self.restart_map.update({
+                _restart_map.update({
                     '/etc/tmpfiles.d/nova-ovs-vhost-user.conf': []})
+        return _restart_map
+
+    def __init__(self, **kwargs):
+        """Allow augmenting behaviour on external factors."""
+        super().__init__(**kwargs)
+        if reactive.is_flag_set('charm.ovn-chassis.enable-openstack'):
+            if self.options.enable_sriov:
+                if 'amqp' not in self.required_relations:
+                    self.required_relations.append('amqp')
 
     def install(self):
         """Extend the default install method to handle update-alternatives.
@@ -645,43 +666,78 @@ class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
     def ovn_sysconfdir():
         return '/etc/openvswitch'
 
-    def __init__(self, **kwargs):
-        """Allow augmenting behaviour on external factors."""
-        super().__init__(**kwargs)
-        self.nrpe_check_services = [
+    @property
+    def packages(self):
+        _pkgs = super().packages[:]
+        if self.enable_openstack:
+            _pkgs.extend(['networking-ovn-metadata-agent', 'haproxy'])
+        return _pkgs
+
+    @property
+    def services(self):
+        _services = super().services[:]
+        if self.enable_openstack:
+            _services.append('networking-ovn-metadata-agent')
+        return _services
+
+    @property
+    def restart_map(self):
+        _restart_map = super().restart_map.copy()
+        if self.enable_openstack:
+            _restart_map.update({
+                '/etc/neutron/'
+                'networking_ovn_metadata_agent.ini': [
+                    'networking-ovn-metadata-agent'],
+            })
+        return _restart_map
+
+    @property
+    def nrpe_check_services(self):
+        _nrpe_check_services = super().nrpe_check_services[:]
+        _nrpe_check_services.extend([
             'ovn-host',
             'ovs-vswitchd',
-            'ovsdb-server',
-        ]
+            'ovsdb-server'])
         if self.enable_openstack:
-            metadata_agent = 'networking-ovn-metadata-agent'
-            self.nrpe_check_services.append(metadata_agent)
-            self.packages.extend(['networking-ovn-metadata-agent', 'haproxy'])
-            self.services.append(metadata_agent)
-            self.restart_map.update({
-                '/etc/neutron/'
-                'networking_ovn_metadata_agent.ini': [metadata_agent],
-            })
+            _nrpe_check_services.append('networking-ovn-metadata-agent')
+        return _nrpe_check_services
 
 
 class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
     """Ussuri incarnation of the OVN Chassis base charm class."""
     abstract_class = True
 
-    def __init__(self, **kwargs):
-        """Allow augmenting behaviour on external factors."""
-        super().__init__(**kwargs)
-        self.nrpe_check_services = [
+    @property
+    def packages(self):
+        _pkgs = super().packages[:]
+        if self.enable_openstack:
+            _pkgs.extend(['neutron-ovn-metadata-agent'])
+        return _pkgs
+
+    @property
+    def services(self):
+        _services = super().services[:]
+        if self.enable_openstack:
+            _services.append('neutron-ovn-metadata-agent')
+        return _services
+
+    @property
+    def restart_map(self):
+        _restart_map = super().restart_map.copy()
+        if self.enable_openstack:
+            _restart_map.update({
+                '/etc/neutron/neutron_ovn_metadata_agent.ini': [
+                    'neutron-ovn-metadata-agent'],
+            })
+        return _restart_map
+
+    @property
+    def nrpe_check_services(self):
+        _nrpe_check_services = super().nrpe_check_services[:]
+        _nrpe_check_services.extend([
             'ovn-controller',
             'ovs-vswitchd',
-            'ovsdb-server',
-        ]
+            'ovsdb-server'])
         if self.enable_openstack:
-            metadata_agent = 'neutron-ovn-metadata-agent'
-            self.nrpe_check_services.append(metadata_agent)
-            self.packages.extend([metadata_agent])
-            self.services.append(metadata_agent)
-            self.restart_map.update({
-                '/etc/neutron/neutron_ovn_metadata_agent.ini': [
-                    metadata_agent],
-            })
+            _nrpe_check_services.append('neutron-ovn-metadata-agent')
+        return _nrpe_check_services
