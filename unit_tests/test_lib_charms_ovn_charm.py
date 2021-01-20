@@ -167,7 +167,7 @@ class TestUssuriOVNChassisCharm(Helper):
         self.assertEquals(self.target.services, [
             'ovn-host', 'neutron-ovn-metadata-agent'])
         self.assertDictEqual(self.target.restart_map, {
-            '/etc/default/openvswitch-switch': ['openvswitch-switch'],
+            '/etc/default/openvswitch-switch': [],
             '/etc/neutron/neutron_ovn_metadata_agent.ini': [
                 'neutron-ovn-metadata-agent'],
             '/etc/openvswitch/system-id.conf': [],
@@ -195,7 +195,7 @@ class TestDPDKOVNChassisCharm(Helper):
         self.assertEquals(self.target.packages, [
             'ovn-host', 'openvswitch-switch-dpdk'])
         self.assertDictEqual(self.target.restart_map, {
-            '/etc/default/openvswitch-switch': ['openvswitch-switch'],
+            '/etc/default/openvswitch-switch': [],
             '/etc/dpdk/interfaces': ['dpdk'],
             '/etc/openvswitch/system-id.conf': [],
         })
@@ -660,7 +660,7 @@ class TestSRIOVOVNChassisCharm(Helper):
         ])
         self.assertDictEqual(self.target.restart_map, {
             '/etc/sriov-netplan-shim/interfaces.yaml': [],
-            '/etc/default/openvswitch-switch': ['openvswitch-switch'],
+            '/etc/default/openvswitch-switch': [],
             '/etc/neutron/neutron.conf': ['neutron-sriov-agent'],
             '/etc/neutron/plugins/ml2/sriov_agent.ini': [
                 'neutron-sriov-agent'],
@@ -698,7 +698,7 @@ class TestHWOffloadChassisCharm(Helper):
         ])
         self.assertDictEqual(self.target.restart_map, {
             '/etc/sriov-netplan-shim/interfaces.yaml': [],
-            '/etc/default/openvswitch-switch': ['openvswitch-switch'],
+            '/etc/default/openvswitch-switch': [],
             '/etc/openvswitch/system-id.conf': [],
         })
         self.assertEquals(self.target.group, 'root')

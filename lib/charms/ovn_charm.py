@@ -150,7 +150,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         # use the on-disk file on service restart.
         self.restart_map = {
             '/etc/openvswitch/system-id.conf': [],
-            '/etc/default/openvswitch-switch': ['openvswitch-switch'],
+            '/etc/default/openvswitch-switch': [],
         }
 
         if self.options.enable_dpdk:
@@ -471,9 +471,18 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 'configuration tasks.',
                                 level=ch_core.hookenv.INFO)
             return
-        # Must make sure the service runs otherwise calls to ``ovs-vsctl`` will
-        # hang.
-        ch_core.host.service_start('openvswitch-switch')
+
+        if mlockall_changed:
+            # NOTE(fnordahl): We need to act immediately to changes to
+            # OVS_DEFAULT in-line. It is important to write config to disk
+            # and perhaps restart the openvswitch-swith service prior to
+            # attempting to do run-time configuration of OVS as we may have
+            # to pass options to `ovs-vsctl` for `ovs-vswitchd` to run at all.
+            ch_core.host.service_restart('openvswitch-switch')
+        else:
+            # Must make sure the service runs otherwise calls to ``ovs-vsctl``
+            # will hang.
+            ch_core.host.service_start('openvswitch-switch')
 
         restart_required = False
         # NOTE(fnordahl): Due to what is probably a bug in Open vSwitch
@@ -518,9 +527,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                          '--', 'add', 'Open_vSwitch', '.', 'manager_options',
                          '@manager')
 
-        if mlockall_changed:
-            restart_required = True
-        elif self.options.enable_hardware_offload:
+        if self.options.enable_hardware_offload:
             restart_required = self.configure_ovs_hw_offload()
         elif self.options.enable_dpdk:
             restart_required = self.configure_ovs_dpdk()
