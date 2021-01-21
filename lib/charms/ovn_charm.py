@@ -118,7 +118,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     # Services to be monitored by nrpe
     nrpe_check_base_services = []
     # Extra packages and services to be installed, managed and monitored if
-    # charm forms part of an Openstack Deployemnt
+    # charm forms part of an Openstack Deployment
     openstack_packages = []
     openstack_services = []
     openstack_restart_map = {}
@@ -192,7 +192,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
     @property
     def services(self):
-        """Full list of services to be managed..
+        """Full list of services to be managed.
 
         :returns: List of services.
         :rtype: List[str]
