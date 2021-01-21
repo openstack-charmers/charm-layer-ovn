@@ -85,15 +85,24 @@ class Helper(test_utils.PatchHelper):
             'enable-dpdk': False,
             'bridge-interface-mappings': 'br-ex:eth0'
         }
+        self.enable_openstack = mock.PropertyMock
+        self.enable_openstack.return_value = False
         if release and release == 'train':
             self.target = ovn_charm.BaseTrainOVNChassisCharm()
+            self.patch(
+                'charms.ovn_charm.BaseTrainOVNChassisCharm.enable_openstack',
+                new_callable=self.enable_openstack)
         else:
             self.target = ovn_charm.BaseUssuriOVNChassisCharm()
+            self.patch(
+                'charms.ovn_charm.BaseUssuriOVNChassisCharm.enable_openstack',
+                new_callable=self.enable_openstack)
         # remove the 'is_flag_set' patch so the tests can use it
         self._patches['is_flag_set'].stop()
         setattr(self, 'is_flag_set', None)
         del(self._patches['is_flag_set'])
         del(self._patches_start['is_flag_set'])
+
         self.patch('charmhelpers.contrib.openstack.context.DPDKDeviceContext',
                    name='DPDKDeviceContext')
         self.DPDKDeviceContext.return_value = lambda: {
@@ -122,7 +131,8 @@ class Helper(test_utils.PatchHelper):
 class TestTrainOVNChassisCharm(Helper):
 
     def setUp(self):
-        super().setUp(release='train', is_flag_set_return_value=True)
+        super().setUp(release='train')
+        self.enable_openstack.return_value = True
 
     def test_optional_openstack_metadata_train(self):
         self.assertEquals(self.target.packages, [
@@ -138,7 +148,8 @@ class TestTrainOVNChassisCharm(Helper):
 class TestUssuriOVNChassisCharm(Helper):
 
     def setUp(self):
-        super().setUp(is_flag_set_return_value=True)
+        super().setUp()
+        self.enable_openstack.return_value = True
 
     def test_optional_openstack_metadata_ussuri(self):
         self.assertEquals(self.target.packages, [
@@ -440,7 +451,7 @@ class TestOVNChassisCharm(Helper):
                       'external-ids:ovn-remote=fake-sb-conn-str'),
         ])
         self.run.reset_mock()
-        self.target.enable_openstack = True
+        self.enable_openstack.return_value = True
         self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
         managers = mock.MagicMock()
         self.SimpleOVSDB.return_value = managers
@@ -628,8 +639,10 @@ class TestSRIOVOVNChassisCharm(Helper):
             'bridge-interface-mappings': 'br-ex:eth0',
             'ovn-bridge-mappings': 'physnet2:br-ex',
         }, is_flag_set_return_value=True)
+        self.enable_openstack.return_value = True
 
     def test__init__(self):
+        self.maxDiff = None
         self.assertEquals(self.target.packages, [
             'ovn-host',
             'sriov-netplan-shim',
@@ -646,6 +659,9 @@ class TestSRIOVOVNChassisCharm(Helper):
                 'neutron-ovn-metadata-agent']
         })
         self.assertEquals(self.target.group, 'neutron')
+        self.assertEquals(
+            self.target.required_relations,
+            ['certificates', 'ovsdb', 'amqp'])
 
     def test_install(self):
         self.patch_target('configure_source')
