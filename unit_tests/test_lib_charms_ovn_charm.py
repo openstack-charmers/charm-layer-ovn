@@ -439,6 +439,7 @@ class TestOVNChassisCharm(Helper):
         self.patch_object(ovn_charm.OVNConfigurationAdapter, 'ovn_key')
         self.patch_object(ovn_charm.OVNConfigurationAdapter, 'ovn_cert')
         self.patch_object(ovn_charm.OVNConfigurationAdapter, 'ovn_ca_cert')
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
         self.patch_target('get_data_ip')
         self.get_data_ip.return_value = 'fake-data-ip'
         self.patch_target('get_ovs_hostname')
@@ -447,6 +448,7 @@ class TestOVNChassisCharm(Helper):
         self.check_if_paused.return_value = ('some', 'reason')
         self.target.configure_ovs('fake-sb-conn-str', True)
         self.run.assert_not_called()
+        self.service_restart.assert_not_called()
         self.check_if_paused.return_value = (None, None)
         self.target.configure_ovs('fake-sb-conn-str', False)
         self.run.assert_has_calls([
@@ -461,6 +463,7 @@ class TestOVNChassisCharm(Helper):
             mock.call('ovs-vsctl', 'set', 'open', '.',
                       'external-ids:ovn-remote=fake-sb-conn-str'),
         ])
+        self.service_restart.assert_not_called()
         self.run.reset_mock()
         self.target.enable_openstack = True
         self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
@@ -485,6 +488,7 @@ class TestOVNChassisCharm(Helper):
                       '--', 'add', 'Open_vSwitch', '.', 'manager_options',
                       '@manager'),
         ])
+        assert self.service_restart.called
 
     def test_render_nrpe(self):
         self.patch_object(ovn_charm.nrpe, 'NRPE')
