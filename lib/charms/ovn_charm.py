@@ -253,10 +253,9 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     def __init__(self, **kwargs):
         """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
-        if self.enable_openstack:
-            if self.options.enable_sriov:
-                if 'amqp' not in self.required_relations:
-                    self.required_relations.append('amqp')
+        if (self.enable_openstack and self.options.enable_sriov
+                and 'amqp' not in self.required_relations):
+            self.required_relations.append('amqp')
 
     def install(self):
         """Extend the default install method to handle update-alternatives.
