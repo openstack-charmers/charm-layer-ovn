@@ -115,10 +115,18 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     python_version = 3
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
+    openstack_packages = []
+    openstack_services = []
+    openstack_restart_map = {}
+    nrpe_check_base_services = []
+    nrpe_check_openstack_services = []
 
     @property
     def nrpe_check_services(self):
-        return []
+        _check_services = self.nrpe_check_base_services[:]
+        if self.enable_openstack:
+            _check_services.extend(self.nrpe_check_openstack_services)
+        return _check_services
 
     @property
     def enable_openstack(self):
@@ -146,6 +154,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         if self.enable_openstack:
             if self.options.enable_sriov:
                 _packages.append('neutron-sriov-agent')
+            _packages.extend(self.openstack_packages)
         return _packages
 
     @property
@@ -161,6 +170,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     @property
     def services(self):
         _services = ['ovn-host']
+        if self.enable_openstack:
+            _services.extend(self.openstack_services)
         return _services
 
     @property
@@ -189,6 +200,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 '/etc/sriov-netplan-shim/interfaces.yaml': [],
             })
         if self.enable_openstack:
+            _restart_map.update(self.openstack_restart_map)
             if self.options.enable_sriov:
                 _restart_map.update({
                     '/etc/neutron/neutron.conf': ['neutron-sriov-agent'],
@@ -661,83 +673,34 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
     """Train incarnation of the OVN Chassis base charm class."""
     abstract_class = True
+    openstack_packages = ['networking-ovn-metadata-agent', 'haproxy']
+    openstack_services = ['networking-ovn-metadata-agent']
+    openstack_restart_map = {
+        '/etc/neutron/networking_ovn_metadata_agent.ini': [
+            'networking-ovn-metadata-agent']}
+    nrpe_check_base_services = [
+        'ovn-host',
+        'ovs-vswitchd',
+        'ovsdb-server']
+    nrpe_check_openstack_services = [
+        'networking-ovn-metadata-agent']
 
     @staticmethod
     def ovn_sysconfdir():
         return '/etc/openvswitch'
 
-    @property
-    def packages(self):
-        _pkgs = super().packages[:]
-        if self.enable_openstack:
-            _pkgs.extend(['networking-ovn-metadata-agent', 'haproxy'])
-        return _pkgs
-
-    @property
-    def services(self):
-        _services = super().services[:]
-        if self.enable_openstack:
-            _services.append('networking-ovn-metadata-agent')
-        return _services
-
-    @property
-    def restart_map(self):
-        _restart_map = super().restart_map.copy()
-        if self.enable_openstack:
-            _restart_map.update({
-                '/etc/neutron/'
-                'networking_ovn_metadata_agent.ini': [
-                    'networking-ovn-metadata-agent'],
-            })
-        return _restart_map
-
-    @property
-    def nrpe_check_services(self):
-        _nrpe_check_services = super().nrpe_check_services[:]
-        _nrpe_check_services.extend([
-            'ovn-host',
-            'ovs-vswitchd',
-            'ovsdb-server'])
-        if self.enable_openstack:
-            _nrpe_check_services.append('networking-ovn-metadata-agent')
-        return _nrpe_check_services
-
 
 class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
     """Ussuri incarnation of the OVN Chassis base charm class."""
     abstract_class = True
-
-    @property
-    def packages(self):
-        _pkgs = super().packages[:]
-        if self.enable_openstack:
-            _pkgs.extend(['neutron-ovn-metadata-agent'])
-        return _pkgs
-
-    @property
-    def services(self):
-        _services = super().services[:]
-        if self.enable_openstack:
-            _services.append('neutron-ovn-metadata-agent')
-        return _services
-
-    @property
-    def restart_map(self):
-        _restart_map = super().restart_map.copy()
-        if self.enable_openstack:
-            _restart_map.update({
-                '/etc/neutron/neutron_ovn_metadata_agent.ini': [
-                    'neutron-ovn-metadata-agent'],
-            })
-        return _restart_map
-
-    @property
-    def nrpe_check_services(self):
-        _nrpe_check_services = super().nrpe_check_services[:]
-        _nrpe_check_services.extend([
-            'ovn-controller',
-            'ovs-vswitchd',
-            'ovsdb-server'])
-        if self.enable_openstack:
-            _nrpe_check_services.append('neutron-ovn-metadata-agent')
-        return _nrpe_check_services
+    openstack_packages = ['neutron-ovn-metadata-agent']
+    openstack_services = ['neutron-ovn-metadata-agent']
+    openstack_restart_map = {
+        '/etc/neutron/neutron_ovn_metadata_agent.ini': [
+            'neutron-ovn-metadata-agent']}
+    nrpe_check_base_services = [
+        'ovn-controller',
+        'ovs-vswitchd',
+        'ovsdb-server']
+    nrpe_check_openstack_services = [
+        'neutron-ovn-metadata-agent']

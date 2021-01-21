@@ -642,6 +642,7 @@ class TestSRIOVOVNChassisCharm(Helper):
         self.enable_openstack.return_value = True
 
     def test__init__(self):
+        self.maxDiff = None
         self.assertEquals(self.target.packages, [
             'ovn-host',
             'sriov-netplan-shim',
