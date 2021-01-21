@@ -115,14 +115,22 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     python_version = 3
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
+    # Services to be monitored by nrpe
+    nrpe_check_base_services = []
+    # Extra packages and services to be installed, managed and monitored if
+    # charm forms part of an Openstack Deployemnt
     openstack_packages = []
     openstack_services = []
     openstack_restart_map = {}
-    nrpe_check_base_services = []
     nrpe_check_openstack_services = []
 
     @property
     def nrpe_check_services(self):
+        """Full list of services to be monitored by nrpe.
+
+        :returns: List of services
+        :rtype: List[str]
+        """
         _check_services = self.nrpe_check_base_services[:]
         if self.enable_openstack:
             _check_services.extend(self.nrpe_check_openstack_services)
@@ -130,10 +138,20 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
     @property
     def enable_openstack(self):
+        """Whether charm forms part of an OpenStack deployment.
+
+        :returns: Whether charm forms part of an OpenStack deployment
+        :rtype: boolean
+        """
         return reactive.is_flag_set('charm.ovn-chassis.enable-openstack')
 
     @property
     def packages(self):
+        """Full list of packages to be installed.
+
+        :returns: List of packages
+        :rtype: List[str]
+        """
         _packages = ['ovn-host']
         if self.options.enable_dpdk:
             _packages.extend(['openvswitch-switch-dpdk'])
@@ -159,6 +177,11 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
     @property
     def group(self):
+        """Group that should own files
+
+        :returns: Group name
+        :rtype: str
+        """
         # When OpenStack support is enabled the various config files laid
         # out for Neutron agents need to have group ownership of 'neutron'
         # for the services to have access to them.
@@ -169,6 +192,11 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
     @property
     def services(self):
+        """Full list of services to be managed..
+
+        :returns: List of services.
+        :rtype: List[str]
+        """
         _services = ['ovn-host']
         if self.enable_openstack:
             _services.extend(self.openstack_services)
@@ -176,6 +204,11 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
     @property
     def restart_map(self):
+        """Which services should be notified when a file changes.
+
+        :returns: Restart map
+        :rtype: Dict[str, List[str]]
+        """
         # Note that we use the standard config render features of
         # charms.openstack to just copy this file in place hence no
         # service attached.
@@ -220,7 +253,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     def __init__(self, **kwargs):
         """Allow augmenting behaviour on external factors."""
         super().__init__(**kwargs)
-        if reactive.is_flag_set('charm.ovn-chassis.enable-openstack'):
+        if self.enable_openstack:
             if self.options.enable_sriov:
                 if 'amqp' not in self.required_relations:
                     self.required_relations.append('amqp')

@@ -638,7 +638,7 @@ class TestSRIOVOVNChassisCharm(Helper):
             'enable-dpdk': False,
             'bridge-interface-mappings': 'br-ex:eth0',
             'ovn-bridge-mappings': 'physnet2:br-ex',
-        })
+        }, is_flag_set_return_value=True)
         self.enable_openstack.return_value = True
 
     def test__init__(self):
@@ -659,6 +659,9 @@ class TestSRIOVOVNChassisCharm(Helper):
                 'neutron-ovn-metadata-agent']
         })
         self.assertEquals(self.target.group, 'neutron')
+        self.assertEquals(
+            self.target.required_relations,
+            ['certificates', 'ovsdb', 'amqp'])
 
     def test_install(self):
         self.patch_target('configure_source')
