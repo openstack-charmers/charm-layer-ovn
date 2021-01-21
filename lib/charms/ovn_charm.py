@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import collections
+import functools
+import hashlib
+import hmac
 import ipaddress
 import os
 import subprocess
@@ -678,6 +681,10 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 # for bridges used for external connectivity we want the
                 # datapath to act like an ordinary MAC-learning switch.
                 **{'fail-mode': 'standalone'},
+                # Workaround for netplan LP: #1912643
+                **{'other-config': {
+                    'hwaddr': self.unique_bridge_mac(
+                        self.get_hashed_machine_id('charm-ovn-chassis'), br)}},
             })
             for port in bpi[br]:
                 ifdatamap = bpi.get_ifdatamap(br, port)
@@ -728,6 +735,51 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         nrpe.add_init_service_checks(
             charm_nrpe, self.nrpe_check_services, current_unit)
         charm_nrpe.write()
+
+    @staticmethod
+    def get_hashed_machine_id(app_id):
+        """Get local machine ID.
+
+        The machine ID must be treated as confidential information and we
+        cannot expose it or parts of it, especially not on the network.
+
+        :param app_id: Application specific ID used when hashing machine ID.
+        :type app_id: str
+        :returns: machine ID
+        :rtype: bytearray
+        :raises: OSError
+        """
+        with open('/etc/machine-id', 'r') as fin:
+            return hmac.new(
+                bytes.fromhex(fin.read().rstrip()),
+                msg=bytes(app_id, 'utf-8'),
+                digestmod=hashlib.sha256).digest()
+
+    @staticmethod
+    def unique_bridge_mac(machine_id, bridge_name):
+        """Generate uniqe mac address for use on a bridge interface.
+
+        The bridge interface will be visible in the datapath and as such the
+        address we choose must be globally unique. We accomplish this by
+        composing a MAC address from the local machine-id(5), a prefix and the
+        name of the bridge.
+
+        :param machine_id: Local machine ID.
+        :type machine_id: bytearray
+        :param bridge_name: Name of bridge for which the address will be used.
+        :type bridge_name: str
+        :returns: String representation of generated MAC address.
+        :rtype: str
+        """
+        # prefix from the IANA 64-bit MAC Unassigned range
+        generated = bytearray.fromhex('b61d9e')
+        # extend two last bytes of hashed machine ID
+        generated.extend(machine_id[-2:])
+        # append checksum of bridge name
+        generated.append(
+            functools.reduce(
+                lambda x, y: x ^ y, [ord(c) for c in bridge_name]))
+        return ':'.join('{:02x}'.format(b) for b in generated)
 
 
 class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
