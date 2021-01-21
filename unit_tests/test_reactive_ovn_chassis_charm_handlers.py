@@ -133,6 +133,7 @@ class TestOvnHandlers(test_utils.PatchHelper):
         self.patch_object(handlers.reactive, 'endpoint_from_flag')
         self.patch_object(handlers.charm, 'optional_interfaces')
         self.patch_object(handlers.reactive, 'set_flag')
+        self.patch_object(handlers.reactive, 'is_flag_set', return_value=True)
         ovsdb = mock.MagicMock()
         ovsdb.db_sb_connection_strs = [
             'ssl:192.0.2.11:6642',
@@ -142,7 +143,7 @@ class TestOvnHandlers(test_utils.PatchHelper):
         self.endpoint_from_flag.return_value = ovsdb
         handlers.configure_ovs()
         self.charm.configure_ovs.assert_called_once_with(
-            ','.join(ovsdb.db_sb_connection_strs))
+            ','.join(ovsdb.db_sb_connection_strs), True)
         self.charm.render_with_interfaces.assert_called_once_with(
             self.optional_interfaces((ovsdb,),
                                      'nova-compute.connected',

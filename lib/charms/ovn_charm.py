@@ -52,6 +52,7 @@ class OVNConfigurationAdapter(
             os_context.DPDKDeviceContext(
                 bridges_key=self.charm_instance.bridges_key)())
         self._sriov_device = os_context.SRIOVContext()
+        self._disable_mlockall = None
 
     @property
     def ovn_key(self):
@@ -77,6 +78,21 @@ class OVNConfigurationAdapter(
     @property
     def sriov_device(self):
         return self._sriov_device
+
+    @property
+    def mlockall_disabled(self):
+        """Determine if Open vSwitch use of mlockall() should be disabled
+
+        If the disable-mlockall config option is unset, mlockall will be
+        disabled if running in a container and will default to enabled if
+        not running in a container.
+        """
+        self._disable_mlockall = ch_core.hookenv.config('disable-mlockall')
+        if self._disable_mlockall is None:
+            self._disable_mlockall = False
+            if ch_core.host.is_container():
+                self._disable_mlockall = True
+        return self._disable_mlockall
 
 
 class NeutronPluginRelationAdapter(
@@ -216,7 +232,9 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         # ``configure_ovs`` method.  The openvswitch-switch init script will
         # use the on-disk file on service restart.
         _restart_map = {
-            '/etc/openvswitch/system-id.conf': []}
+            '/etc/openvswitch/system-id.conf': [],
+            '/etc/default/openvswitch-switch': [],
+        }
         # The ``dpdk`` system init script takes care of binding devices
         # to the driver specified in configuration at run- and boot- time.
         #
@@ -505,7 +523,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                         opvs.remove('.', 'other_config', k)
         return something_changed
 
-    def configure_ovs(self, sb_conn):
+    def configure_ovs(self, sb_conn, mlockall_changed):
         """Global Open vSwitch configuration tasks.
 
         :param sb_conn: Comma separated string of OVSDB connection methods.
@@ -519,9 +537,18 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 'configuration tasks.',
                                 level=ch_core.hookenv.INFO)
             return
-        # Must make sure the service runs otherwise calls to ``ovs-vsctl`` will
-        # hang.
-        ch_core.host.service_start('openvswitch-switch')
+
+        if mlockall_changed:
+            # NOTE(fnordahl): We need to act immediately to changes to
+            # OVS_DEFAULT in-line. It is important to write config to disk
+            # and perhaps restart the openvswitch-swith service prior to
+            # attempting to do run-time configuration of OVS as we may have
+            # to pass options to `ovs-vsctl` for `ovs-vswitchd` to run at all.
+            ch_core.host.service_restart('openvswitch-switch')
+        else:
+            # Must make sure the service runs otherwise calls to ``ovs-vsctl``
+            # will hang.
+            ch_core.host.service_start('openvswitch-switch')
 
         restart_required = False
         # NOTE(fnordahl): Due to what is probably a bug in Open vSwitch
@@ -565,6 +592,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                          'create', 'Manager', 'target="{}"'.format(target),
                          '--', 'add', 'Open_vSwitch', '.', 'manager_options',
                          '@manager')
+
         if self.options.enable_hardware_offload:
             restart_required = self.configure_ovs_hw_offload()
         elif self.options.enable_dpdk:
