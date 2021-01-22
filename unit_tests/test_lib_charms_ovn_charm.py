@@ -266,6 +266,8 @@ class TestDPDKOVNChassisCharm(Helper):
         self.patch_object(ovn_charm.ch_ovs, 'add_bridge_port')
         self.patch_target('check_if_paused')
         self.check_if_paused.return_value = ('some', 'reason')
+        self.patch_target('unique_bridge_mac')
+        self.unique_bridge_mac.return_value = 'fa:ke:ma:ca:dd:rs'
         self.target.configure_bridges()
         self.BridgePortInterfaceMap.assert_not_called()
         self.check_if_paused.return_value = (None, None)
@@ -296,6 +298,7 @@ class TestDPDKOVNChassisCharm(Helper):
                     'datapath-type': 'netdev',
                     'protocols': 'OpenFlow13,OpenFlow15',
                     'fail-mode': 'standalone',
+                    'other-config': {'hwaddr': 'fa:ke:ma:ca:dd:rs'},
                 }),
             mock.call(
                 'br-ex',
@@ -304,6 +307,7 @@ class TestDPDKOVNChassisCharm(Helper):
                     'datapath-type': 'netdev',
                     'protocols': 'OpenFlow13,OpenFlow15',
                     'fail-mode': 'standalone',
+                    'other-config': {'hwaddr': 'fa:ke:ma:ca:dd:rs'},
                 }),
         ], any_order=True)
         self.add_bridge_bond.assert_called_once_with(
@@ -567,6 +571,8 @@ class TestOVNChassisCharm(Helper):
         self.patch_object(ovn_charm.ch_ovs, 'add_bridge_port')
         self.patch_target('check_if_paused')
         self.check_if_paused.return_value = ('some', 'reason')
+        self.patch_target('unique_bridge_mac')
+        self.unique_bridge_mac.return_value = 'fa:ke:ma:ca:dd:rs'
         self.target.configure_bridges()
         self.BridgePortInterfaceMap.assert_not_called()
         self.check_if_paused.return_value = (None, None)
@@ -598,6 +604,7 @@ class TestOVNChassisCharm(Helper):
                     'datapath-type': 'system',
                     'protocols': 'OpenFlow13,OpenFlow15',
                     'fail-mode': 'standalone',
+                    'other-config': {'hwaddr': 'fa:ke:ma:ca:dd:rs'},
                 }),
             mock.call(
                 'br-other',
@@ -606,6 +613,7 @@ class TestOVNChassisCharm(Helper):
                     'datapath-type': 'system',
                     'protocols': 'OpenFlow13,OpenFlow15',
                     'fail-mode': 'standalone',
+                    'other-config': {'hwaddr': 'fa:ke:ma:ca:dd:rs'},
                 }),
         ], any_order=True)
         self.add_bridge_port.assert_has_calls([
@@ -654,6 +662,23 @@ class TestOVNChassisCharm(Helper):
         self.execl.assert_called_once_with(
             '/usr/bin/env', 'python3', '/some/path/hooks/config-changed')
 
+    def test_get_hashed_machine_id(self):
+        self.maxDiff = None
+        mocked_open = mock.mock_open(read_data='deadbeefcafe\n')
+        with mock.patch('builtins.open', mocked_open):
+            self.assertEquals(
+                self.target.get_hashed_machine_id('app'),
+                b'l\xee\xe7\x06+\x89\xf2*\x84\xe9\xaf\xc2to\xad\xc0\x07\xbapK'
+                b'\x93_\xb8Es\x08\xec7\x0fQT\x98')
+            mocked_open.assert_called_once_with(
+                '/etc/machine-id', 'r')
+
+    def test_unique_bridge_mac(self):
+        self.assertEquals(
+            self.target.unique_bridge_mac(
+                bytearray.fromhex('deadbeef'), 'br-ex'),
+            'b6:1d:9e:be:ef:20')
+
 
 class TestSRIOVOVNChassisCharm(Helper):
 
@@ -668,7 +693,6 @@ class TestSRIOVOVNChassisCharm(Helper):
         self.enable_openstack.return_value = True
 
     def test__init__(self):
-        self.maxDiff = None
         self.assertEquals(self.target.packages, [
             'ovn-host',
             'sriov-netplan-shim',
