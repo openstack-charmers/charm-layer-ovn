@@ -283,6 +283,14 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
         super().install()
 
+        if not reactive.is_flag_set('charm.installed'):
+            # We need to render /etc/default/openvswitch-switch after the
+            # initial install and restart openvswitch-switch. This is done to
+            # ensure that when the disable-mlockall config option is unset,
+            # mlockall is disabled when running in a container.
+            self.render_configs(['/etc/default/openvswitch-switch'])
+            ch_core.host.service_restart('openvswitch-switch')
+
         if self.options.enable_dpdk:
             self.run('update-alternatives', '--set', 'ovs-vswitchd',
                      '/usr/lib/openvswitch-switch-dpdk/ovs-vswitchd-dpdk')
