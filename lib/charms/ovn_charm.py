@@ -288,8 +288,13 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             # initial install and restart openvswitch-switch. This is done to
             # ensure that when the disable-mlockall config option is unset,
             # mlockall is disabled when running in a container.
+            # The ovn-host stop/start is needed until the following bug is
+            # fixed: https://pad.lv/1913736. Really this is a work-around
+            # to get the pause/resume test to work.
             self.render_configs(['/etc/default/openvswitch-switch'])
+            ch_core.host.service_stop('ovn-host')
             ch_core.host.service_restart('openvswitch-switch')
+            ch_core.host.service_start('ovn-host')
 
         if self.options.enable_dpdk:
             self.run('update-alternatives', '--set', 'ovs-vswitchd',
