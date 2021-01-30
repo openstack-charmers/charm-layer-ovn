@@ -56,6 +56,8 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'configure_nrpe': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'config.rendered',),
+                'maybe_disable_mlockall': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,),
             },
             'when_none': {
                 'amqp_connection': ('charm.paused', 'is-update-status-hook'),
@@ -72,6 +74,8 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'configure_nrpe': (
                     'charm.paused',
                     'is-update-status-hook',),
+                'maybe_disable_mlockall': (
+                    'charm.installed',),
             },
             'when_any': {
                 'configure_bridges': (
@@ -128,6 +132,28 @@ class TestOvnHandlers(test_utils.PatchHelper):
         nova_compute.publish_shared_secret.assert_called_once_with()
         self.charm.install.assert_called_once_with()
         self.charm.assess_status.assert_called_once_with()
+
+    def test_maybe_disable_mlockall(self):
+        self.patch_object(handlers.reactive, 'is_flag_set')
+        self.charm.options.mlockall_disabled = False
+        self.is_flag_set.return_value = False
+        handlers.maybe_disable_mlockall()
+        self.assertFalse(self.charm.render_openvswitch_defaults.called)
+        self.charm.options.mlockall_disabled = False
+        self.is_flag_set.return_value = True
+        handlers.maybe_disable_mlockall()
+        self.assertFalse(self.charm.render_openvswitch_defaults.called)
+        self.charm.options.mlockall_disabled = True
+        self.is_flag_set.return_value = True
+        handlers.maybe_disable_mlockall()
+        self.charm.render_openvswitch_defaults.assert_called_once_with(
+            restart=False)
+        self.charm.render_openvswitch_defaults.reset_mock()
+        self.charm.options.mlockall_disabled = True
+        self.is_flag_set.return_value = False
+        handlers.maybe_disable_mlockall()
+        self.charm.render_openvswitch_defaults.assert_called_once_with(
+            restart=True)
 
     def test_configure_ovs(self):
         self.patch_object(handlers.reactive, 'endpoint_from_flag')

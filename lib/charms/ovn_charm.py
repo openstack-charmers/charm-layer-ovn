@@ -283,19 +283,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
         super().install()
 
-        if not reactive.is_flag_set('charm.installed'):
-            # We need to render /etc/default/openvswitch-switch after the
-            # initial install and restart openvswitch-switch. This is done to
-            # ensure that when the disable-mlockall config option is unset,
-            # mlockall is disabled when running in a container.
-            # The ovn-host stop/start is needed until the following bug is
-            # fixed: https://pad.lv/1913736. Really this is a work-around
-            # to get the pause/resume test to work.
-            self.render_configs(['/etc/default/openvswitch-switch'])
-            ch_core.host.service_stop('ovn-host')
-            ch_core.host.service_restart('openvswitch-switch')
-            ch_core.host.service_start('ovn-host')
-
         if self.options.enable_dpdk:
             self.run('update-alternatives', '--set', 'ovs-vswitchd',
                      '/usr/lib/openvswitch-switch-dpdk/ovs-vswitchd-dpdk')
@@ -741,6 +728,29 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         nrpe.add_init_service_checks(
             charm_nrpe, self.nrpe_check_services, current_unit)
         charm_nrpe.write()
+
+    def render_openvswitch_defaults(self, restart=False):
+        """Render Open vSwitch package defaults file and optionally restart.
+
+        This is a separate method as we want strict control of when a data
+        plane service such as Open vSwitch is restarted, and we cannot defer
+        this task to the default framework config rendering and service
+        lifecycle handling.
+
+        :param restart: Restart the service, defaults to False
+        :type restart: bool
+        """
+        self.render_configs(['/etc/default/openvswitch-switch'])
+        if restart:
+            ch_core.hookenv.log('Restarting Open vSwitch to pick up changes '
+                                'to package defaults file.',
+                                level=ch_core.hookenv.INFO)
+            # The ovn-host stop/start is needed until LP: #1913736 is fixed.
+            # Really this is a work-around to assure the pause/resume action
+            # continues to work after a restart of the vSwitch.
+            ch_core.host.service_stop('ovn-host')
+            ch_core.host.service_restart('openvswitch-switch')
+            ch_core.host.service_start('ovn-host')
 
 
 class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):

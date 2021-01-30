@@ -654,6 +654,17 @@ class TestOVNChassisCharm(Helper):
         self.execl.assert_called_once_with(
             '/usr/bin/env', 'python3', '/some/path/hooks/config-changed')
 
+    def test_render_openvswitch_defaults(self):
+        self.patch_target('render_configs')
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.target.render_openvswitch_defaults(False)
+        self.render_configs.assert_called_once_with(
+            ['/etc/default/openvswitch-switch'])
+        self.assertFalse(self.service_restart.called)
+        self.target.render_openvswitch_defaults(True)
+        self.service_restart.assert_called_once_with(
+            'openvswitch-switch')
+
 
 class TestSRIOVOVNChassisCharm(Helper):
 
@@ -694,17 +705,11 @@ class TestSRIOVOVNChassisCharm(Helper):
         self.patch_target('configure_source')
         self.patch_target('run')
         self.patch_target('update_api_ports')
-        self.patch_target('render_configs')
-        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
         self.patch_object(ovn_charm.reactive, 'is_flag_set',
                           return_value=False)
         self.target.install()
         self.configure_source.assert_called_once_with(
             'networking-tools-source')
-        self.render_configs.assert_called_once_with(
-            ['/etc/default/openvswitch-switch'])
-        self.service_restart.assert_called_once_with(
-            'openvswitch-switch')
 
 
 class TestHWOffloadChassisCharm(Helper):

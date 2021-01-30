@@ -73,6 +73,19 @@ def enable_openstack():
         charm_instance.assess_status()
 
 
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG)
+@reactive.when_none('charm.installed')
+def maybe_disable_mlockall():
+    with charm.provide_charm_instance() as charm_instance:
+        if charm_instance.options.mlockall_disabled:
+            # We need to render /etc/default/openvswitch-switch after the
+            # initial install and restart openvswitch-switch. This is done to
+            # ensure that when the disable-mlockall config option is unset,
+            # mlockall is disabled when running in a container. LP: #1906280
+            charm_instance.render_openvswitch_defaults(
+                restart=not reactive.is_flag_set('charm.paused'))
+
+
 @reactive.when_none('charm.paused', 'is-update-status-hook')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'config.rendered')
 def configure_bridges():
