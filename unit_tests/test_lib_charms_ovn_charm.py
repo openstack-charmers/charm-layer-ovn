@@ -698,6 +698,8 @@ class TestSRIOVOVNChassisCharm(Helper):
         self.patch_object(ovn_charm.ch_core.host, 'service_restart')
         self.patch_object(ovn_charm.reactive, 'is_flag_set',
                           return_value=False)
+        self.patch_object(ovn_charm.ch_core.hookenv, 'config')
+        self.config.return_value = None
         self.target.install()
         self.configure_source.assert_called_once_with(
             'networking-tools-source')
