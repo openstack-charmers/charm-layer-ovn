@@ -283,7 +283,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
         super().install()
 
-        if not reactive.is_flag_set('charm.installed'):
+        if (not reactive.is_flag_set('charm.installed') and
+                self.options.mlockall_disabled):
             # We need to render /etc/default/openvswitch-switch after the
             # initial install and restart openvswitch-switch. This is done to
             # ensure that when the disable-mlockall config option is unset,
