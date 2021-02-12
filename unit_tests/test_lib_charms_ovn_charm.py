@@ -38,8 +38,12 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
         }
         self.patch('charmhelpers.contrib.openstack.context.SRIOVContext',
                    name='SRIOVContext')
+        m = mock.patch.object(ovn_charm.ch_core.hookenv, 'config')
+        m.start()
         self.target = ovn_charm.OVNConfigurationAdapter(
             charm_instance=self.charm_instance)
+        m.stop()
+        setattr(self, 'config', None)
 
     def test_ovn_key(self):
         self.assertEquals(self.target.ovn_key, '/etc/path/key_host')
@@ -99,12 +103,19 @@ class Helper(test_utils.PatchHelper):
             'driver': 'fakedriver',
         }
         self.patch_object(ovn_charm.ch_core.hookenv, 'config')
-        self.config.side_effect = lambda: config or {
-            'enable-hardware-offload': False,
-            'enable-sriov': False,
-            'enable-dpdk': False,
-            'bridge-interface-mappings': 'br-ex:eth0'
-        }
+
+        def _fake_config(x=None):
+            cfg = config or {
+                'enable-hardware-offload': False,
+                'enable-sriov': False,
+                'enable-dpdk': False,
+                'bridge-interface-mappings': 'br-ex:eth0'
+            }
+            if x:
+                return cfg.get(x)
+            return cfg
+
+        self.config.side_effect = _fake_config
         self.enable_openstack = mock.PropertyMock
         self.enable_openstack.return_value = False
         if release and release == 'train':

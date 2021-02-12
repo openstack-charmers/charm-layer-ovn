@@ -48,11 +48,15 @@ class OVNConfigurationAdapter(
     def __init__(self, **kwargs):
         """Initialize contexts consumed from charm helpers."""
         super().__init__(**kwargs)
-        self._dpdk_device = self.OSContextObjectView(
-            os_context.DPDKDeviceContext(
-                bridges_key=self.charm_instance.bridges_key)())
-        self._sriov_device = os_context.SRIOVContext()
+        self._dpdk_device = None
+        self._sriov_device = None
         self._disable_mlockall = None
+        if ch_core.hookenv.config('enable-dpdk'):
+            self._dpdk_device = self.OSContextObjectView(
+                os_context.DPDKDeviceContext(
+                    bridges_key=self.charm_instance.bridges_key)())
+        if ch_core.hookenv.config('enable-sriov'):
+            self._sriov_device = os_context.SRIOVContext()
 
     @property
     def ovn_key(self):
