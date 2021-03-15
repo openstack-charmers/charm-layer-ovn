@@ -47,6 +47,9 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'enable_openstack': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'nova-compute.connected',),
+                'ensure_networking_tools_installed': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'config.changed.enable-hardware-offload',),
                 'configure_bridges': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'config.rendered',),
@@ -64,6 +67,9 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'is-update-status-hook',
                     'nova-compute.connected',),
                 'enable_openstack': ('charm.paused', 'is-update-status-hook'),
+                'ensure_networking_tools_installed': (
+                    'charm.paused',
+                    'is-update-status-hook'),
                 'configure_bridges': (
                     'charm.paused',
                     'is-update-status-hook'),

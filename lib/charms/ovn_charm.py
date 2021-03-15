@@ -55,7 +55,8 @@ class OVNConfigurationAdapter(
             self._dpdk_device = self.OSContextObjectView(
                 os_context.DPDKDeviceContext(
                     bridges_key=self.charm_instance.bridges_key)())
-        if ch_core.hookenv.config('enable-sriov'):
+        if (ch_core.hookenv.config('enable-hardware-offload') or
+                ch_core.hookenv.config('enable-sriov')):
             self._sriov_device = os_context.SRIOVContext()
 
     @property
