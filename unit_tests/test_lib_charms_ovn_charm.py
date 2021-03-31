@@ -756,12 +756,15 @@ class TestDPDKOVNChassisCharm(Helper):
         dpdk_context.cpu_mask.return_value = '0x42'
         dpdk_context.socket_memory.return_value = '1024,1024'
         self.dpdk_eal_allow_devices.return_value = '-a 0000:42:01.0'
+        self.target.options.pmd_cpu_set = '0-7,^1,^5,^6,16-23,^20,^22'
+        dpdk_context.pmd_cpu_mask.return_value = '0xaf009d'
         self.assertTrue(self.target.configure_ovs_dpdk())
         opvs.open_vswitch.set.assert_has_calls([
             mock.call('.', 'other_config:dpdk-lcore-mask', '0x42'),
             mock.call('.', 'other_config:dpdk-socket-mem', '1024,1024'),
             mock.call('.', 'other_config:dpdk-init', 'true'),
             mock.call('.', 'other_config:dpdk-extra', '-a 0000:42:01.0'),
+            mock.call('.', 'other_config:pmd-cpu-mask', '0xaf009d'),
         ])
 
         # Existing config, confirm no restart nor values set
@@ -771,6 +774,7 @@ class TestDPDKOVNChassisCharm(Helper):
                 'dpdk-socket-mem': '1024,1024',
                 'dpdk-init': 'true',
                 'dpdk-extra': '-a 0000:42:01.0',
+                'pmd-cpu-mask': '0xaf009d',
             }}]
         opvs.open_vswitch.reset_mock()
         self.assertFalse(self.target.configure_ovs_dpdk())
@@ -782,10 +786,39 @@ class TestDPDKOVNChassisCharm(Helper):
                 'dpdk-socket-mem': '1024,1024',
                 'dpdk-init': 'true',
                 'dpdk-extra': '-a 0000:42:01.0',
+                'pmd-cpu-mask': '0xaf009d',
             }}]
         self.assertTrue(self.target.configure_ovs_dpdk())
         opvs.open_vswitch.set.assert_called_once_with(
             '.', 'other_config:dpdk-lcore-mask', '0x42')
+
+        # Existing config, confirm reset of pmd-cpu-set config option results
+        # in removal of the pmd-cpu-mask paramter in order to use OVS defaults
+        opvs.open_vswitch.__iter__.return_value = [
+            {'other_config': {
+                'dpdk-lcore-mask': '0x42',
+                'dpdk-socket-mem': '1024,1024',
+                'dpdk-init': 'true',
+                'dpdk-extra': '-a 0000:42:01.0',
+                'pmd-cpu-mask': '0xaf009d',
+            }}]
+        self.target.options.pmd_cpu_set = None
+        self.assertTrue(self.target.configure_ovs_dpdk())
+        opvs.open_vswitch.remove.assert_called_once_with(
+            '.', 'other_config', 'pmd-cpu-mask')
+
+    def test_ovs_dpdk_cpu_overlap_check(self):
+        dpdk_context = mock.MagicMock()
+        self.patch_object(ovn_charm.os_context, 'OVSDPDKDeviceContext',
+                          return_value=dpdk_context)
+        # 000000000000000001000010
+        dpdk_context.cpu_mask.return_value = '0x42'
+        # 101011110000000010011101
+        dpdk_context.pmd_cpu_mask.return_value = '0xaf009d'
+        self.assertFalse(self.target.ovs_dpdk_cpu_overlap_check())
+        # 101011110000000011011111
+        dpdk_context.pmd_cpu_mask.return_value = '0xaf00df'
+        self.assertTrue(self.target.ovs_dpdk_cpu_overlap_check())
 
     def test_purge_packages(self):
         self.assertEquals(
@@ -1161,6 +1194,25 @@ class TestOVNChassisCharm(Helper):
             (None, None)
         )
 
+        # test when there is overlap between dpdk-lcore-mask and pmd-cpu-mask
+        self.target.options.enable_dpdk = True
+        self.patch_target('ovs_dpdk_cpu_overlap_check')
+        self.ovs_dpdk_cpu_overlap_check.return_value = True
+        message = 'Fix overlap between dpdk-lcore-mask and pmd-cpu-mask.'
+        self.assertEquals(
+            self.target.custom_assess_status_last_check(),
+            ('blocked', message)
+        )
+
+        # test when no overlap between dpdk-lcore-mask and pmd-cpu-mask
+        self.target.options.enable_dpdk = True
+        self.patch_target('ovs_dpdk_cpu_overlap_check')
+        self.ovs_dpdk_cpu_overlap_check.return_value = False
+        self.assertEquals(
+            self.target.custom_assess_status_last_check(),
+            (None, None)
+        )
+
     def test_states_to_check(self):
         self.maxDiff = None
         expect = collections.OrderedDict([
@@ -1256,6 +1308,7 @@ class TestOVNChassisCharm(Helper):
                 'dpdk-socket-mem': '1024,1024',
                 'dpdk-init': 'true',
                 'dpdk-extra': '-a 0000:42:01.0',
+                'pmd-cpu-mask': '0xaf009d',
             }}]
         self.assertTrue(self.target.configure_ovs_dpdk())
         opvs.open_vswitch.remove.assert_has_calls([
@@ -1263,6 +1316,7 @@ class TestOVNChassisCharm(Helper):
             mock.call('.', 'other_config', 'dpdk-socket-mem'),
             mock.call('.', 'other_config', 'dpdk-init'),
             mock.call('.', 'other_config', 'dpdk-extra'),
+            mock.call('.', 'other_config', 'pmd-cpu-mask'),
         ])
 
         opvs.open_vswitch.__iter__.return_value = [{
