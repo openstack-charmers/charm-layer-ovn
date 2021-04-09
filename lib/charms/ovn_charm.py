@@ -23,12 +23,117 @@ import charmhelpers.contrib.charmsupport.nrpe as nrpe
 import charmhelpers.contrib.openstack.context as os_context
 import charmhelpers.contrib.network.ovs as ch_ovs
 import charmhelpers.contrib.network.ovs.ovsdb as ch_ovsdb
+import charmhelpers.contrib.openstack.deferred_events as deferred_events
 
 import charms_openstack.adapters
 import charms_openstack.charm
 
 
 CERT_RELATION = 'certificates'
+_DEFERABLE_SVC_LIST = ['openvswitch-switch', 'ovn-controller', 'ovn-host',
+                       'ovs-vswitchd', 'ovsdb-server']
+
+
+class DeferredEventMixin():
+    """Mixin to add to charm class to add support for deferred events."""
+
+    @property
+    def deferable_services(self):
+        """Services which should be stopped from restarting.
+
+        All services from self.services are deferable. But the charm may
+        install a package which install a service that the charm does not add
+        to its restart_map. In that case it will be missing from
+        self.services. However one of the jobs of deferred events is to ensure
+        that packages updates outside of charms also do not restart services.
+        To ensure there is a complete list take the services from self.services
+        and also add in a known list of networking services.
+
+        NOTE: It does not matter if one of the services in the list is not
+        installed on the system.
+
+        """
+        svcs = self.services[:]
+        svcs.extend(_DEFERABLE_SVC_LIST)
+        return list(set(svcs))
+
+    def configure_deferred_restarts(self):
+        """Install deferred event files and policies.
+
+        Check that the charm supports deferred events by checking for the
+        presence of the 'enable-auto-restarts' config option. If it is present
+        then install the supporting files and directories, however,
+        configure_deferred_restarts only enables deferred events if
+        'enable-auto-restarts' is True.
+        """
+        if 'enable-auto-restarts' in ch_core.hookenv.config().keys():
+            deferred_events.configure_deferred_restarts(
+                self.deferable_services)
+            # Reactive charms execute perm missing.
+            os.chmod(
+                '/var/lib/charm/{}/policy-rc.d'.format(
+                    ch_core.hookenv.service_name()),
+                0o755)
+
+    def custom_assess_status_check(self):
+        """Report deferred events in charm status message."""
+        state = None
+        message = None
+        deferred_events.check_restart_timestamps()
+        events = collections.defaultdict(set)
+        for e in deferred_events.get_deferred_events():
+            events[e.action].add(e.service)
+        for action, svcs in events.items():
+            svc_msg = "Services queued for {}: {}".format(
+                action, ', '.join(sorted(svcs)))
+            state = 'active'
+            if message:
+                message = "{}. {}".format(message, svc_msg)
+            else:
+                message = svc_msg
+        deferred_hooks = deferred_events.get_deferred_hooks()
+        if deferred_hooks:
+            state = 'active'
+            svc_msg = "Hooks skipped due to disabled auto restarts: {}".format(
+                ', '.join(sorted(deferred_hooks)))
+            if message:
+                message = "{}. {}".format(message, svc_msg)
+            else:
+                message = svc_msg
+        return state, message
+
+    def configure_ovs(self, sb_conn, mlockall_changed,
+                      check_deferred_events=True):
+        """Run configure_ovs if permitted.
+
+        :param sb_conn: Comma separated string of OVSDB connection methods.
+        :type sb_conn: str
+        :param mlockall_changed: Whether the mlockall param has changed.
+        :type mlockall_changed: bool
+        :param check_deferred_events: Whether to check if restarts are
+                                      permitted before running hook.
+        :type check_deferred_events: bool
+        """
+        if ((not check_deferred_events) or
+                deferred_events.is_restart_permitted()):
+            deferred_events.clear_deferred_hook('configure_ovs')
+            super().configure_ovs(sb_conn, mlockall_changed)
+        else:
+            deferred_events.set_deferred_hook('configure_ovs')
+
+    def install(self, check_deferred_events=True):
+        """Run install if permitted.
+
+        :param check_deferred_events: Whether to check if restarts are
+                                      permitted before running hook.
+        :type check_deferred_events: bool
+        """
+        if ((not check_deferred_events) or
+                deferred_events.is_restart_permitted()):
+            deferred_events.clear_deferred_hook('install')
+            super().install()
+        else:
+            deferred_events.set_deferred_hook('install')
 
 
 class OVNConfigurationAdapter(
