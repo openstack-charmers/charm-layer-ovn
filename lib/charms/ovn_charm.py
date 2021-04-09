@@ -39,13 +39,33 @@ class DeferredEventMixin():
 
     @property
     def deferable_services(self):
-        """Services which should be stopped from restarting."""
+        """Services which should be stopped from restarting.
+
+        All services from self.services are deferable. But the charm may
+        install a package which install a service that the charm does not add
+        to its restart_map. In that case it will be missing from
+        self.services. However one of the jobs of deferred events is to ensure
+        that packages updates outside of charms also do not restart services.
+        To ensure there is a complete list take the services from self.services
+        and also add in a known list of networking services.
+
+        NOTE: It does not matter if one of the services in the list is not
+        installed on the system.
+
+        """
         svcs = self.services[:]
         svcs.extend(_DEFERABLE_SVC_LIST)
         return list(set(svcs))
 
     def configure_deferred_restarts(self):
-        """Install deferred event files and policies."""
+        """Install deferred event files and policies.
+
+        Check that the charm supports deferred events by checking for the
+        presence of the 'enable-auto-restarts' config option. If it is present
+        then install the supporting files and directories, however,
+        configure_deferred_restarts only enables deferred events if
+        'enable-auto-restarts' is True.
+        """
         if 'enable-auto-restarts' in ch_core.hookenv.config().keys():
             deferred_events.configure_deferred_restarts(
                 self.deferable_services)
