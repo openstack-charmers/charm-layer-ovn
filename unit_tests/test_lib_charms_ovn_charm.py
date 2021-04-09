@@ -22,6 +22,185 @@ import charms_openstack.test_utils as test_utils
 import charms.ovn_charm as ovn_charm
 
 
+class TestDeferredEventMixin(test_utils.PatchHelper):
+
+    class FakeBaseClass():
+        def install(self):
+            return
+
+        def configure_ovs(self, sb_conn, mlockall_changed):
+            return
+
+    class FakeCharm(ovn_charm.DeferredEventMixin, FakeBaseClass):
+
+        @property
+        def services(self):
+            return ['mysvc']
+
+    def setUp(self):
+        super().setUp()
+        self.charm_instance = self.FakeCharm()
+
+    def test_deferable_services(self):
+        self.assertEqual(
+            self.charm_instance.deferable_services,
+            [
+                'ovn-host',
+                'openvswitch-switch',
+                'mysvc',
+                'ovs-vswitchd',
+                'ovsdb-server',
+                'ovn-controller'])
+
+    def test_configure_deferred_restarts(self):
+        self.patch_object(
+            ovn_charm.ch_core.hookenv,
+            'config',
+            return_value={'enable-auto-restarts': True})
+        self.patch_object(
+            ovn_charm.ch_core.hookenv,
+            'service_name',
+            return_value='myapp')
+        self.patch_object(
+            ovn_charm.deferred_events,
+            'configure_deferred_restarts')
+        self.patch_object(ovn_charm.os, 'chmod')
+        self.charm_instance.configure_deferred_restarts()
+        self.configure_deferred_restarts.assert_called_once_with(
+            [
+                'ovn-host',
+                'openvswitch-switch',
+                'mysvc',
+                'ovs-vswitchd',
+                'ovsdb-server',
+                'ovn-controller'])
+        self.chmod.assert_called_once_with(
+            '/var/lib/charm/myapp/policy-rc.d',
+            493)
+
+    def test_configure_deferred_restarts_unsupported(self):
+        self.patch_object(ovn_charm.ch_core.hookenv, 'config', return_value={})
+        self.patch_object(
+            ovn_charm.deferred_events,
+            'configure_deferred_restarts')
+        self.charm_instance.configure_deferred_restarts()
+        self.assertFalse(self.configure_deferred_restarts.called)
+
+    def test_custom_assess_status_check(self):
+        event_mock1 = mock.MagicMock()
+        event_mock1.service = 'serviceA'
+        event_mock1.action = 'restart'
+        event_mock2 = mock.MagicMock()
+        event_mock2.service = 'serviceB'
+        event_mock2.action = 'restart'
+        self.patch_object(
+            ovn_charm.deferred_events,
+            'check_restart_timestamps')
+        self.patch_object(ovn_charm.deferred_events, 'get_deferred_events')
+        self.patch_object(ovn_charm.deferred_events, 'get_deferred_hooks')
+
+        # Test restart but no hook
+        self.get_deferred_events.return_value = [
+            event_mock1,
+            event_mock2]
+        self.get_deferred_hooks.return_value = []
+        self.assertEqual(
+            self.charm_instance.custom_assess_status_check(),
+            ('active', 'Services queued for restart: serviceA, serviceB'))
+
+        # Test hook but no restarts
+        self.get_deferred_events.return_value = []
+        self.get_deferred_hooks.return_value = ['configure_ovs', 'install']
+        self.assertEqual(
+            self.charm_instance.custom_assess_status_check(),
+            (
+                'active',
+                ('Hooks skipped due to disabled auto restarts: configure_ovs, '
+                 'install')))
+
+        # Test restart and hook
+        self.get_deferred_events.return_value = [
+            event_mock1,
+            event_mock2]
+        self.get_deferred_hooks.return_value = ['configure_ovs', 'install']
+        self.assertEqual(
+            self.charm_instance.custom_assess_status_check(),
+            (
+                'active',
+                ('Services queued for restart: serviceA, serviceB. '
+                 'Hooks skipped due to disabled auto restarts: '
+                 'configure_ovs, install')))
+
+        # Test no restart and no hook
+        self.get_deferred_events.return_value = []
+        self.get_deferred_hooks.return_value = []
+        self.assertEqual(
+            self.charm_instance.custom_assess_status_check(),
+            (None, None))
+
+    def test_configure_ovs(self):
+        self.patch_object(ovn_charm.deferred_events, 'is_restart_permitted')
+        self.patch_object(ovn_charm.deferred_events, 'clear_deferred_hook')
+        self.patch_object(ovn_charm.deferred_events, 'set_deferred_hook')
+
+        # Tests with restarts permitted
+        self.clear_deferred_hook.reset_mock()
+        self.is_restart_permitted.return_value = True
+        self.charm_instance.configure_ovs(
+            's_conn',
+            'mlockall_changed',
+            check_deferred_events=True)
+        self.clear_deferred_hook.assert_called_once_with('configure_ovs')
+
+        self.clear_deferred_hook.reset_mock()
+        self.charm_instance.configure_ovs(
+            's_conn',
+            'mlockall_changed',
+            check_deferred_events=False)
+        self.clear_deferred_hook.assert_called_once_with('configure_ovs')
+
+        # Tests with restarts not permitted
+        self.clear_deferred_hook.reset_mock()
+        self.is_restart_permitted.return_value = False
+        self.charm_instance.configure_ovs(
+            's_conn',
+            'mlockall_changed',
+            check_deferred_events=True)
+        self.assertFalse(self.clear_deferred_hook.called)
+
+        self.clear_deferred_hook.reset_mock()
+        self.charm_instance.configure_ovs(
+            's_conn',
+            'mlockall_changed',
+            check_deferred_events=False)
+        self.clear_deferred_hook.assert_called_once_with('configure_ovs')
+
+    def test_install(self):
+        self.patch_object(ovn_charm.deferred_events, 'is_restart_permitted')
+        self.patch_object(ovn_charm.deferred_events, 'clear_deferred_hook')
+        self.patch_object(ovn_charm.deferred_events, 'set_deferred_hook')
+
+        # Tests with restarts permitted
+        self.clear_deferred_hook.reset_mock()
+        self.is_restart_permitted.return_value = True
+        self.charm_instance.install(check_deferred_events=True)
+        self.clear_deferred_hook.assert_called_once_with('install')
+
+        self.clear_deferred_hook.reset_mock()
+        self.charm_instance.install(check_deferred_events=False)
+        self.clear_deferred_hook.assert_called_once_with('install')
+
+        # Tests with restarts not permitted
+        self.clear_deferred_hook.reset_mock()
+        self.is_restart_permitted.return_value = False
+        self.charm_instance.install(check_deferred_events=True)
+        self.assertFalse(self.clear_deferred_hook.called)
+
+        self.clear_deferred_hook.reset_mock()
+        self.charm_instance.install(check_deferred_events=False)
+        self.clear_deferred_hook.assert_called_once_with('install')
+
+
 class TestOVNConfigurationAdapter(test_utils.PatchHelper):
 
     def setUp(self):
