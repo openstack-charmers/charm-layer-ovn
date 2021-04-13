@@ -50,6 +50,7 @@ class TestDeferredEventMixin(test_utils.PatchHelper):
                 'mysvc',
                 'ovs-vswitchd',
                 'ovsdb-server',
+                'ovs-record-hostname',
                 'ovn-controller'])
 
     def test_configure_deferred_restarts(self):
@@ -73,6 +74,7 @@ class TestDeferredEventMixin(test_utils.PatchHelper):
                 'mysvc',
                 'ovs-vswitchd',
                 'ovsdb-server',
+                'ovs-record-hostname',
                 'ovn-controller'])
         self.chmod.assert_called_once_with(
             '/var/lib/charm/myapp/policy-rc.d',
