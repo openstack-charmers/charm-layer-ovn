@@ -31,7 +31,7 @@ import charms_openstack.charm
 
 CERT_RELATION = 'certificates'
 _DEFERABLE_SVC_LIST = ['openvswitch-switch', 'ovn-controller', 'ovn-host',
-                       'ovs-vswitchd', 'ovsdb-server']
+                       'ovs-vswitchd', 'ovsdb-server', 'ovs-record-hostname']
 
 
 class DeferredEventMixin():
