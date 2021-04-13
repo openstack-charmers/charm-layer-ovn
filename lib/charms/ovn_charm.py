@@ -114,7 +114,12 @@ class DeferredEventMixin():
                                       permitted before running hook.
         :type check_deferred_events: bool
         """
-        if ((not check_deferred_events) or
+        changed = reactive.flags.is_flag_set(
+            'config.changed.enable-auto-restarts')
+        # Run method if enable-auto-restarts has changed, irrespective of what
+        # it was changed to. This ensure that this method is not immediately
+        # deferred when enable-auto-restarts is initially set to False.
+        if ((not check_deferred_events) or changed or
                 deferred_events.is_restart_permitted()):
             deferred_events.clear_deferred_hook('configure_ovs')
             super().configure_ovs(sb_conn, mlockall_changed)
@@ -128,7 +133,12 @@ class DeferredEventMixin():
                                       permitted before running hook.
         :type check_deferred_events: bool
         """
-        if ((not check_deferred_events) or
+        changed = reactive.flags.is_flag_set(
+            'config.changed.enable-auto-restarts')
+        # Run method if enable-auto-restarts has changed, irrespective of what
+        # it was changed to. This ensure that this method is not immediately
+        # deferred when enable-auto-restarts is initially set to False.
+        if ((not check_deferred_events) or changed or
                 deferred_events.is_restart_permitted()):
             deferred_events.clear_deferred_hook('install')
             super().install()

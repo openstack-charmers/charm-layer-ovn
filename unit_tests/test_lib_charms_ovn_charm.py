@@ -144,9 +144,11 @@ class TestDeferredEventMixin(test_utils.PatchHelper):
         self.patch_object(ovn_charm.deferred_events, 'is_restart_permitted')
         self.patch_object(ovn_charm.deferred_events, 'clear_deferred_hook')
         self.patch_object(ovn_charm.deferred_events, 'set_deferred_hook')
+        self.patch_object(ovn_charm.reactive.flags, 'is_flag_set')
 
         # Tests with restarts permitted
         self.clear_deferred_hook.reset_mock()
+        self.is_flag_set.return_value = False
         self.is_restart_permitted.return_value = True
         self.charm_instance.configure_ovs(
             's_conn',
@@ -177,13 +179,32 @@ class TestDeferredEventMixin(test_utils.PatchHelper):
             check_deferred_events=False)
         self.clear_deferred_hook.assert_called_once_with('configure_ovs')
 
+        # Tests with restarts not permitted from this hooks onwards.
+        self.clear_deferred_hook.reset_mock()
+        self.is_restart_permitted.return_value = False
+        self.is_flag_set.return_value = True
+        self.charm_instance.configure_ovs(
+            's_conn',
+            'mlockall_changed',
+            check_deferred_events=True)
+        self.clear_deferred_hook.assert_called_once_with('configure_ovs')
+
+        self.clear_deferred_hook.reset_mock()
+        self.charm_instance.configure_ovs(
+            's_conn',
+            'mlockall_changed',
+            check_deferred_events=False)
+        self.clear_deferred_hook.assert_called_once_with('configure_ovs')
+
     def test_install(self):
         self.patch_object(ovn_charm.deferred_events, 'is_restart_permitted')
         self.patch_object(ovn_charm.deferred_events, 'clear_deferred_hook')
         self.patch_object(ovn_charm.deferred_events, 'set_deferred_hook')
+        self.patch_object(ovn_charm.reactive.flags, 'is_flag_set')
 
         # Tests with restarts permitted
         self.clear_deferred_hook.reset_mock()
+        self.is_flag_set.return_value = False
         self.is_restart_permitted.return_value = True
         self.charm_instance.install(check_deferred_events=True)
         self.clear_deferred_hook.assert_called_once_with('install')
@@ -197,6 +218,17 @@ class TestDeferredEventMixin(test_utils.PatchHelper):
         self.is_restart_permitted.return_value = False
         self.charm_instance.install(check_deferred_events=True)
         self.assertFalse(self.clear_deferred_hook.called)
+
+        self.clear_deferred_hook.reset_mock()
+        self.charm_instance.install(check_deferred_events=False)
+        self.clear_deferred_hook.assert_called_once_with('install')
+
+        # Tests with restarts not permitted from this hooks onwards.
+        self.clear_deferred_hook.reset_mock()
+        self.is_restart_permitted.return_value = False
+        self.is_flag_set.return_value = True
+        self.charm_instance.install(check_deferred_events=True)
+        self.clear_deferred_hook.assert_called_once_with('install')
 
         self.clear_deferred_hook.reset_mock()
         self.charm_instance.install(check_deferred_events=False)
