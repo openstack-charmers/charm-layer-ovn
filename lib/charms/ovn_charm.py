@@ -37,6 +37,23 @@ _DEFERABLE_SVC_LIST = ['openvswitch-switch', 'ovn-controller', 'ovn-host',
 class DeferredEventMixin():
     """Mixin to add to charm class to add support for deferred events."""
 
+    def restart_on_change(self):
+        """Restart the services in the self.restart_map{} attribute if any of
+        the files identified by the keys changes for the wrapped call.
+
+        Usage:
+
+           with restart_on_change(restart_map, ...):
+               do_stuff_that_might_trigger_a_restart()
+               ...
+        """
+        return ch_core.host.restart_on_change(
+            self.full_restart_map,
+            stopstart=True,
+            restart_functions=getattr(self, 'restart_functions', None),
+            can_restart_now_f=deferred_events.check_and_record_restart_request,
+            post_svc_restart_f=deferred_events.process_svc_restart)
+
     @property
     def deferable_services(self):
         """Services which should be stopped from restarting.
