@@ -93,6 +93,8 @@ def run_deferred_hooks(args):
     :type args: List[str]
     """
     _run_deferred_hooks()
+    # Hooks may trigger services to need restarting so restart any services
+    # marked as needing it now.
     os_utils.restart_services_action(deferred_only=True)
     with charms_openstack.charm.provide_charm_instance() as charm_instance:
         charm_instance._assess_status()
