@@ -47,6 +47,8 @@ def restart_services(args):
     if not (deferred_only or services):
         hookenv.action_fail("Please specify deferred-only or services")
         return
+    if hookenv.action_get('run-hooks'):
+        _run_deferred_hooks()
     if deferred_only:
         os_utils.restart_services_action(deferred_only=True)
     else:
@@ -64,12 +66,8 @@ def show_deferred_events(args):
     os_utils.show_deferred_events_action_helper()
 
 
-def run_deferred_hooks(args):
-    """Run deferred hooks.
-
-    :param args: Unused
-    :type args: List[str]
-    """
+def _run_deferred_hooks():
+    """Run deferred hooks."""
     deferred_methods = deferred_events.get_deferred_hooks()
     ovsdb = reactive.endpoint_from_flag('ovsdb.available')
     with charms_openstack.charm.provide_charm_instance() as charm_instance:
@@ -86,6 +84,17 @@ def run_deferred_hooks(args):
                 ','.join(ovsdb.db_sb_connection_strs),
                 reactive.is_flag_set('config.changed.disable-mlockall'),
                 check_deferred_events=False)
+
+
+def run_deferred_hooks(args):
+    """Run deferred hooks.
+
+    :param args: Unused
+    :type args: List[str]
+    """
+    _run_deferred_hooks()
+    os_utils.restart_services_action(deferred_only=True)
+    with charms_openstack.charm.provide_charm_instance() as charm_instance:
         charm_instance._assess_status()
 
 
