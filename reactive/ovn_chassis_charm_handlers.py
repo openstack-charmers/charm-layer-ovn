@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import contextlib
 import os
 
 import charmhelpers.core as ch_core
@@ -137,14 +138,22 @@ def provide_chassis_certificates_to_principal():
     ovsdb_subordinate = reactive.endpoint_from_flag(
         'ovsdb-subordinate.available')
     try:
-        with charm.provide_charm_instance() as charm_instance:
-            with open(charm_instance.options.ovn_ca_cert, 'r') as ovn_ca_cert:
-                with open(charm_instance.options.ovn_cert, 'r') as ovn_cert:
-                    with open(charm_instance.options.ovn_key, 'r') as ovn_key:
-                        ovsdb_subordinate.publish_chassis_certificates(
-                            ovn_ca_cert.read(),
-                            ovn_cert.read(),
-                            ovn_key.read())
+        # Support for passing a Tuple with multiple expressions to with
+        # appeared in Python 3.9, until the versions up to 3.9 go out of
+        # support we can use the ExitStack.
+        with contextlib.ExitStack() as es:
+            charm_instance = es.enter_context(
+                charm.provide_charm_instance())
+            ovn_ca_cert = es.enter_context(
+                open(charm_instance.options.ovn_ca_cert, 'r'))
+            ovn_cert = es.enter_context(
+                open(charm_instance.options.ovn_cert, 'r'))
+            ovn_key = es.enter_context(
+                open(charm_instance.options.ovn_key, 'r'))
+            ovsdb_subordinate.publish_chassis_certificates(
+                    ovn_ca_cert.read(),
+                    ovn_cert.read(),
+                    ovn_key.read())
     except OSError as e:
         ch_core.hookenv.log('Unable to provide principal with '
                             'chassis certificates: "{}"'.format(str(e)))
