@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import io
 import mock
 
 import reactive.ovn_chassis_charm_handlers as handlers
@@ -59,6 +60,10 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'configure_nrpe': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'config.rendered',),
+                'provide_chassis_certificates_to_principal': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'ovsdb-subordinate.available',
+                    'certificates.available'),
             },
             'when_none': {
                 'amqp_connection': ('charm.paused', 'is-update-status-hook'),
@@ -76,6 +81,9 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'configure_ovs': ('charm.paused', 'is-update-status-hook'),
                 'pause_unit_from_config': ('charm.installed', 'charm.paused'),
                 'configure_nrpe': (
+                    'charm.paused',
+                    'is-update-status-hook',),
+                'provide_chassis_certificates_to_principal': (
                     'charm.paused',
                     'is-update-status-hook',),
             },
@@ -170,3 +178,22 @@ class TestOvnHandlers(test_utils.PatchHelper):
         handlers.pause_unit_from_config()
         self.charm.pause.assert_called_once_with()
         self.charm.assess_status.assert_called_once_with()
+
+    def test_provide_chassis_certificates_to_principal(self):
+        self.patch_object(handlers.reactive, 'endpoint_from_flag')
+        ovsdb_subordinate = mock.MagicMock()
+        self.endpoint_from_flag.return_value = ovsdb_subordinate
+        with mock.patch('builtins.open', create=True) as mocked_open:
+            mocked_file = mock.MagicMock(spec=io.FileIO)
+            mocked_file.__enter__().read.return_value = 'fakecert'
+            mocked_open.return_value = mocked_file
+            handlers.provide_chassis_certificates_to_principal()
+            self.endpoint_from_flag.assert_called_once_with(
+                'ovsdb-subordinate.available')
+            mocked_open.assert_has_calls([
+                mock.call(self.charm.options.ovn_ca_cert, 'r'),
+                mock.call(self.charm.options.ovn_cert, 'r'),
+                mock.call(self.charm.options.ovn_key, 'r'),
+            ], any_order=True)
+            ovsdb_subordinate.publish_chassis_certificates.\
+                assert_called_once_with('fakecert', 'fakecert', 'fakecert')

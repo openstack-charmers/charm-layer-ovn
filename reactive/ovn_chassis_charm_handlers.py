@@ -127,3 +127,24 @@ def configure_nrpe():
     """Handle config-changed for NRPE options."""
     with charm.provide_charm_instance() as charm_instance:
         charm_instance.render_nrpe()
+
+
+@reactive.when_none('charm.paused', 'is-update-status-hook')
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+               'ovsdb-subordinate.available',
+               'certificates.available')
+def provide_chassis_certificates_to_principal():
+    ovsdb_subordinate = reactive.endpoint_from_flag(
+        'ovsdb-subordinate.available')
+    try:
+        with charm.provide_charm_instance() as charm_instance:
+            with open(charm_instance.options.ovn_ca_cert, 'r') as ovn_ca_cert:
+                with open(charm_instance.options.ovn_cert, 'r') as ovn_cert:
+                    with open(charm_instance.options.ovn_key, 'r') as ovn_key:
+                        ovsdb_subordinate.publish_chassis_certificates(
+                            ovn_ca_cert.read(),
+                            ovn_cert.read(),
+                            ovn_key.read())
+    except OSError as e:
+        ch_core.hookenv.log('Unable to provide principal with '
+                            'chassis certificates: "{}"'.format(str(e)))
