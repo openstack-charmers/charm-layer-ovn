@@ -547,10 +547,9 @@ class TestDPDKOVNChassisCharm(Helper):
                 'external-ids': {'charm-ovn-chassis': 'br-ex'}},
             linkup=False, promisc=None, portdata={
                 'external-ids': {'charm-ovn-chassis': 'br-ex'}}),
-        ovsdb.open_vswitch.set.assert_has_calls([
-            mock.call('.', 'external_ids:ovn-bridge-mappings',
-                      'other:br-data,provider:br-ex'),
-        ], any_order=True)
+        ovsdb.open_vswitch.set.assert_called_once_with(
+            '.', 'external_ids:ovn-bridge-mappings',
+            'other:br-data,provider:br-ex')
         ovsdb.open_vswitch.remove.assert_called_once_with(
             '.', 'external_ids', 'ovn-cms-options=enable-chassis-as-gw')
 
