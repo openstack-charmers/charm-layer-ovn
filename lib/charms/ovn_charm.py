@@ -856,13 +856,15 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         opvs = ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch
         if ovn_br_map_str:
             opvs.set('.', 'external_ids:ovn-bridge-mappings', ovn_br_map_str)
-            # NOTE(fnordahl): Workaround for LP: #1848757
-            opvs.set('.', 'external_ids:ovn-cms-options',
-                     'enable-chassis-as-gw')
         else:
             opvs.remove('.', 'external_ids', 'ovn-bridge-mappings')
-            # NOTE(fnordahl): Workaround for LP: #1848757
-            opvs.remove('.', 'external_ids', 'ovn-cms-options')
+
+        if self.options.prefer_chassis_as_gw:
+            opvs.set(
+                '.', 'external_ids:ovn-cms-options', 'enable-chassis-as-gw')
+        else:
+            opvs.remove(
+                '.', 'external_ids', 'ovn-cms-options=enable-chassis-as-gw')
 
     def render_nrpe(self):
         """Configure Nagios NRPE checks."""
