@@ -241,8 +241,9 @@ options:
     type: boolean
     default: false
     description: |
-      Prefer units of the named application in CMS scheduling of HA chassis
-      groups aka. gateways.
+      Prefer units of this application in CMS (Cloud Management System)
+      scheduling of HA chassis groups (aka. gateways) over units of other OVN
+      chassis applications present in this deployment.
       .
       By default the CMS will schedule HA chassis groups across all chassis
       with bridge- and bridge interface mappings configured.
@@ -254,6 +255,9 @@ options:
       NOTE: If none of the OVN chassis named applications in the deployment
       have this option enabled, the CMS will fall back to schedule gateways to
       chassis with bridge- and bridge interface mapping configured.
+      .
+      NOTE: It is also possible to enable this option on several OVN chassis
+      applications at the same time, e.g. on 2 out of 3.
   nagios_context:
     default: "juju"
     type: string
