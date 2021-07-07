@@ -237,6 +237,27 @@ options:
       integration bridge on the hypervisor and during a migration the operator
       may want to shut down and clean up after the ML2 OVS components before
       the `ovn-controller` takes over and reprograms the bridge flow rules.
+  prefer-chassis-as-gw:
+    type: boolean
+    default: false
+    description: |
+      Prefer units of this application in CMS (Cloud Management System)
+      scheduling of HA chassis groups (aka. gateways) over units of other OVN
+      chassis applications present in this deployment.
+      .
+      By default the CMS will schedule HA chassis groups across all chassis
+      with bridge- and bridge interface mappings configured.
+      .
+      This configuration option would allow you to influence where gateways are
+      scheduled when all units have equal bridge- and bridge interface mapping
+      configuration.
+      .
+      NOTE: If none of the OVN chassis named applications in the deployment
+      have this option enabled, the CMS will fall back to schedule gateways to
+      chassis with bridge- and bridge interface mapping configured.
+      .
+      NOTE: It is also possible to enable this option on several OVN chassis
+      applications at the same time, e.g. on 2 out of 3.
   nagios_context:
     default: "juju"
     type: string

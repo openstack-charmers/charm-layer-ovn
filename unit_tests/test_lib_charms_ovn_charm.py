@@ -322,7 +322,8 @@ class Helper(test_utils.PatchHelper):
                 'enable-hardware-offload': False,
                 'enable-sriov': False,
                 'enable-dpdk': False,
-                'bridge-interface-mappings': 'br-ex:eth0'
+                'bridge-interface-mappings': 'br-ex:eth0',
+                'prefer-chassis-as-gw': False,
             }
             if x:
                 return cfg.get(x)
@@ -424,6 +425,7 @@ class TestDPDKOVNChassisCharm(Helper):
             'bridge-interface-mappings': 'br-ex:eth0 br-data:dpdk-bond0',
             'ovn-bridge-mappings': (
                 'provider:br-ex other:br-data'),
+            'prefer-chassis-as-gw': False,
         })
 
     def test__init__(self):
@@ -545,12 +547,11 @@ class TestDPDKOVNChassisCharm(Helper):
                 'external-ids': {'charm-ovn-chassis': 'br-ex'}},
             linkup=False, promisc=None, portdata={
                 'external-ids': {'charm-ovn-chassis': 'br-ex'}}),
-        ovsdb.open_vswitch.set.assert_has_calls([
-            mock.call('.', 'external_ids:ovn-bridge-mappings',
-                      'other:br-data,provider:br-ex'),
-            mock.call('.', 'external_ids:ovn-cms-options',
-                      'enable-chassis-as-gw'),
-        ], any_order=True)
+        ovsdb.open_vswitch.set.assert_called_once_with(
+            '.', 'external_ids:ovn-bridge-mappings',
+            'other:br-data,provider:br-ex')
+        ovsdb.open_vswitch.remove.assert_called_once_with(
+            '.', 'external_ids', 'ovn-cms-options=enable-chassis-as-gw')
 
 
 class TestOVNChassisCharm(Helper):
@@ -564,6 +565,7 @@ class TestOVNChassisCharm(Helper):
                 'br-provider:00:01:02:03:04:05 br-other:eth5'),
             'ovn-bridge-mappings': (
                 'provider:br-provider other:br-other'),
+            'prefer-chassis-as-gw': True,
         })
 
     def test_optional_openstack_metadata(self):
