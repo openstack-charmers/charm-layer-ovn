@@ -268,6 +268,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     python_version = 3
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
+    valid_config = True
     # Services to be monitored by nrpe
     nrpe_check_base_services = []
     # Extra packages and services to be installed, managed and monitored if
@@ -472,6 +473,29 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             'python3',
             os.path.join(ch_core.hookenv.charm_dir(), 'hooks/config-changed'),
         )
+
+    def check_mandatory_config(self):
+        """Check that all mandatory config has been set and if has valid config.
+
+        Returns (None, None) if the interfaces are okay, or a status, message
+        if any of the config is missing or invalid.
+
+        :returns status & message info
+        :rtype: (status, message) or (None, None)
+        """
+        status, message = super().check_mandatory_config()
+
+        if not self.valid_config:
+            message = ('Wrong format. '
+                       'Expected format is space-delimited list of '
+                       'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
+                       'br-provider:enp3s0f0"')
+            return 'blocked', message
+
+        if status:
+            return status, message
+
+        return None, None
 
     def states_to_check(self, required_relations=None):
         """Override parent method to add custom messaging.
@@ -758,7 +782,16 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 'port interface configuration tasks.',
                                 level=ch_core.hookenv.INFO)
             return
-        bpi = os_context.BridgePortInterfaceMap(bridges_key=self.bridges_key)
+        try:
+            bpi = os_context.BridgePortInterfaceMap(
+                bridges_key=self.bridges_key
+            )
+            self.valid_config = True
+
+        except os_context.BridgesKeyException:
+            self.valid_config = False
+            return
+
         bond_config = os_context.BondConfig()
         ch_core.hookenv.log('BridgePortInterfaceMap: "{}"'.format(bpi.items()),
                             level=ch_core.hookenv.DEBUG)
