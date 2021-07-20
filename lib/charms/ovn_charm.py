@@ -474,16 +474,15 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             os.path.join(ch_core.hookenv.charm_dir(), 'hooks/config-changed'),
         )
 
-    def check_mandatory_config(self):
-        """Check that all mandatory config has been set and if has valid config.
+    def custom_assess_status_last_check(self):
+        """Check if has valid bridge config and set to blocked if is invalid.
 
         Returns (None, None) if the interfaces are okay, or a status, message
-        if any of the config is missing or invalid.
+        if the config is invalid.
 
         :returns status & message info
         :rtype: (status, message) or (None, None)
         """
-        status, message = super().check_mandatory_config()
 
         if not self.valid_config:
             message = ('Wrong format. '
@@ -491,9 +490,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                        'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
                        'br-provider:enp3s0f0"')
             return 'blocked', message
-
-        if status:
-            return status, message
 
         return None, None
 
@@ -788,7 +784,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             )
             self.valid_config = True
 
-        except os_context.BridgesKeyException:
+        except ValueError:
             self.valid_config = False
             return
 

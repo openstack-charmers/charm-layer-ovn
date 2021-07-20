@@ -855,6 +855,35 @@ class TestOVNChassisCharm(Helper):
                       'enable-chassis-as-gw'),
         ], any_order=True)
 
+    def test_wrong_configure_bridges(self):
+        # test that when ValueError raises, changes valid_config to False
+        self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
+        self.BridgePortInterfaceMap.side_effect = ValueError()
+        self.patch_target('check_if_paused')
+        self.check_if_paused.return_value = (None, None)
+        self.assertEqual( self.target.valid_config, True)
+        self.target.configure_bridges()
+        self.BridgePortInterfaceMap.assert_called_once_with(
+            bridges_key='bridge-interface-mappings')
+        self.assertEqual( self.target.valid_config, False)
+
+    def test_custom_assess_status_last_check(self):
+        self.target.valid_config = False
+        message = ('Wrong format. '
+                   'Expected format is space-delimited list of '
+                   'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
+                   'br-provider:enp3s0f0"')
+        self.assertEquals(
+            self.target.custom_assess_status_last_check(),
+            ('blocked', message)
+        )
+        # test when bridge config is right
+        self.target.valid_config = True
+        self.assertEquals(
+            self.target.custom_assess_status_last_check(),
+            (None, None)
+        )
+
     def test_states_to_check(self):
         self.maxDiff = None
         expect = collections.OrderedDict([
