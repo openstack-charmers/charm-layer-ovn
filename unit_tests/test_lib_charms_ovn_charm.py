@@ -861,15 +861,15 @@ class TestOVNChassisCharm(Helper):
         self.BridgePortInterfaceMap.side_effect = ValueError()
         self.patch_target('check_if_paused')
         self.check_if_paused.return_value = (None, None)
-        self.assertEqual( self.target.valid_config, True)
+        self.assertEqual(self.target.valid_config, True)
         self.target.configure_bridges()
         self.BridgePortInterfaceMap.assert_called_once_with(
             bridges_key='bridge-interface-mappings')
-        self.assertEqual( self.target.valid_config, False)
+        self.assertEqual(self.target.valid_config, False)
 
     def test_custom_assess_status_last_check(self):
         self.target.valid_config = False
-        message = ('Wrong format. '
+        message = ('Wrong format for bridge-interface-mappings. '
                    'Expected format is space-delimited list of '
                    'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
                    'br-provider:enp3s0f0"')

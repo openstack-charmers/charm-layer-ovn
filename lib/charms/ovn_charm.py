@@ -485,7 +485,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         """
 
         if not self.valid_config:
-            message = ('Wrong format. '
+            message = ('Wrong format for bridge-interface-mappings. '
                        'Expected format is space-delimited list of '
                        'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
                        'br-provider:enp3s0f0"')
