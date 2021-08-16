@@ -734,21 +734,17 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
 
         # The local ``ovn-controller`` process will retrieve information about
         # how to connect to OVN from the local Open vSwitch database.
-        self.run('ovs-vsctl',
-                 'set', 'open', '.',
-                 'external-ids:ovn-encap-type=geneve', '--',
-                 'set', 'open', '.',
-                 'external-ids:ovn-encap-ip={}'
-                 .format(self.get_data_ip()), '--',
-                 'set', 'open', '.',
-                 'external-ids:system-id={}'
-                 .format(self.get_ovs_hostname()))
-        self.run('ovs-vsctl',
-                 'set',
-                 'open',
-                 '.',
-                 'external-ids:ovn-remote={}'
-                 .format(sb_conn))
+        cmd = ('ovs-vsctl',)
+        for ovs_ext_id in ('external-ids:ovn-encap-type=geneve',
+                           'external-ids:ovn-encap-ip={}'
+                           .format(self.get_data_ip()),
+                           'external-ids:system-id={}'
+                           .format(self.get_ovs_hostname()),
+                           'external-ids:ovn-remote={}'.format(sb_conn),
+                           'external_ids:ovn-match-northd-version=true',
+                           ):
+            cmd = cmd + ('--', 'set', 'open-vswitch', '.', ovs_ext_id)
+        self.run(*cmd)
         if self.enable_openstack:
             # OpenStack Nova expects the local OVSDB server to listen to
             # TCP port 6640 on localhost.  We use this for the OVN metadata
