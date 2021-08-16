@@ -701,6 +701,8 @@ class TestOVNChassisCharm(Helper):
                 'external-ids:system-id=fake-ovs-hostname',
                 '--', 'set', 'open-vswitch', '.',
                 'external-ids:ovn-remote=fake-sb-conn-str',
+                '--', 'set', 'open-vswitch', '.',
+                'external_ids:ovn-match-northd-version=true',
             ),
         ])
         self.service_restart.assert_not_called()
@@ -725,6 +727,8 @@ class TestOVNChassisCharm(Helper):
                 'external-ids:system-id=fake-ovs-hostname',
                 '--', 'set', 'open-vswitch', '.',
                 'external-ids:ovn-remote=fake-sb-conn-str',
+                '--', 'set', 'open-vswitch', '.',
+                'external_ids:ovn-match-northd-version=true',
             ),
             mock.call('ovs-vsctl', '--id', '@manager',
                       'create', 'Manager', 'target="ptcp:6640:127.0.0.1"',
