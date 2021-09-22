@@ -261,6 +261,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             ('20', 'ussuri'),
         ]),
     }
+    nova_vhost_user_file = '/etc/tmpfiles.d/nova-ovs-vhost-user.conf'
     release_pkg = 'ovn-host'
     adapters_class = OVNChassisCharmRelationAdapters
     configuration_class = OVNConfigurationAdapter
@@ -402,8 +403,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 # service attached. systemd-tmpfiles-setup will take care of
                 # it at boot and we will do a first-time initialization in the
                 # ``install`` method.
-                _restart_map.update({
-                    '/etc/tmpfiles.d/nova-ovs-vhost-user.conf': []})
+                _restart_map.update({self.nova_vhost_user_file: []})
         return _restart_map
 
     def __init__(self, **kwargs):
@@ -449,6 +449,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             # deployment.
             if self.enable_openstack and not os.path.exists(
                     '/run/libvirt-vhost-user'):
+                self.render_configs([self.nova_vhost_user_file])
                 self.run('systemd-tmpfiles', '--create')
         else:
             self.run('update-alternatives', '--set', 'ovs-vswitchd',
