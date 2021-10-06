@@ -124,6 +124,21 @@ options:
         uio_pci_generic
       .
       Only used when DPDK is enabled.
+  dpdk-runtime-libraries:
+    type: string
+    default:
+    description: |
+      Space delimited list of additional DPDK runtime libraries that should
+      be installed when DPDK is enabled.
+      .
+      By default, only the runtime libraries that are recommended with the
+      dpdk libraries are installed. Environments that need additional libraries
+      installed should include those library packages. For example, to enable
+      the pmd-bnx2x runtime library specify the name of the software package
+      `librte-pmd-bnx2x20.0`. To enable the pmd-bnx2x and the pmd-ice runtime
+      libraries, specify the value as `librte-pmd-bnx2x20.0 librte-pmd-ice20.0`.
+      .
+      Only used when DPDK is enabled.
   enable-hardware-offload:
     type: boolean
     default: false

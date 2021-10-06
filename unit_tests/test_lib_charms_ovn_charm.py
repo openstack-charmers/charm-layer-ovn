@@ -442,6 +442,27 @@ class TestWallabyOVNChassisCharm(Helper):
             'neutron-ovn-metadata-agent'])
 
 
+class TestDPDKOVNChassisCharmExtraLibs(Helper):
+
+    def setUp(self):
+        super().setUp(config={
+            'enable-hardware-offload': False,
+            'enable-sriov': False,
+            'enable-dpdk': True,
+            'dpdk-bond-mappings': ('dpdk-bond0:a0:36:9f:dd:37:a4 '
+                                   'dpdk-bond0:a0:36:9f:dd:3e:9c'),
+            'bridge-interface-mappings': 'br-ex:eth0 br-data:dpdk-bond0',
+            'ovn-bridge-mappings': (
+                'provider:br-ex other:br-data'),
+            'prefer-chassis-as-gw': False,
+            'dpdk-runtime-libraries': 'librte-pmd-hinic20.0 None',
+        })
+
+    def test__init__(self):
+        self.assertEquals(self.target.packages, [
+            'ovn-host', 'openvswitch-switch-dpdk', 'librte-pmd-hinic20.0'])
+
+
 class TestDPDKOVNChassisCharm(Helper):
 
     def setUp(self):
@@ -455,6 +476,7 @@ class TestDPDKOVNChassisCharm(Helper):
             'ovn-bridge-mappings': (
                 'provider:br-ex other:br-data'),
             'prefer-chassis-as-gw': False,
+            'dpdk-runtime-libraries': '',
         })
 
     def test__init__(self):

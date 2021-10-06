@@ -301,6 +301,21 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         return reactive.is_flag_set('charm.ovn-chassis.enable-openstack')
 
     @property
+    def additional_dpdk_libraries(self):
+        """A list of additional runtime libraries to be installed for dpdk.
+
+        :returns: list of additional packages to install
+        :rtype: List[str]
+        """
+        if self.options.enable_dpdk and self.options.dpdk_runtime_libraries:
+            # dpdk_runtime_libraries is a space delimited list of strings.
+            # some options are disabled by passing 'None' so filter out a
+            # specifying of a 'None' value
+            return list(filter(lambda x: x and x.lower() != 'none',
+                               self.options.dpdk_runtime_libraries.split()))
+        return []
+
+    @property
     def packages(self):
         """Full list of packages to be installed.
 
@@ -310,6 +325,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         _packages = ['ovn-host']
         if self.options.enable_dpdk:
             _packages.extend(['openvswitch-switch-dpdk'])
+            _packages.extend(self.additional_dpdk_libraries)
         if self.options.enable_hardware_offload or self.options.enable_sriov:
             # The ``sriov-netplan-shim`` package does boot-time
             # configuration of Virtual Functions (VFs) in the system.
