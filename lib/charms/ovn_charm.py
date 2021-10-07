@@ -14,6 +14,7 @@
 import collections
 import ipaddress
 import os
+import re
 import subprocess
 
 import charms.reactive as reactive
@@ -307,13 +308,45 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         :returns: list of additional packages to install
         :rtype: List[str]
         """
+        packages = []
         if self.options.enable_dpdk and self.options.dpdk_runtime_libraries:
             # dpdk_runtime_libraries is a space delimited list of strings.
             # some options are disabled by passing 'None' so filter out a
             # specifying of a 'None' value
-            return list(filter(lambda x: x and x.lower() != 'none',
+            pkgs = list(filter(lambda x: x and x.lower() != 'none',
                                self.options.dpdk_runtime_libraries.split()))
-        return []
+            # Attempt to be nice and resolve the package names the user has
+            # provided in order to allow for users to specify 'hinic' etc for
+            # packages. To do this, we will search for all packages using the
+            # format of `librte-*<name>* and return all matching packages.
+            for name in pkgs:
+                regex = re.compile(r'(^\S.*)', re.MULTILINE)
+                if name.lower().startswith('librte'):
+                    packages.append(name)
+                    continue
+
+                cp = self.run('apt-cache', 'policy',
+                              'librte-*{}*'.format(name))
+                # The apt-cache search does not return an error code if the
+                # package could not be found and the return code is 0. The
+                # stdout will be empty in this case and the regex won't
+                # produce a match. Log a warning message and use the provided
+                # package name anyways. This may cause a failure to install,
+                # but the user should have an idea of why.
+                results = re.findall(regex, cp.stdout)
+                if not results:
+                    ch_core.hookenv.log(('Unable to find candidate librte '
+                                         'package for {}. Using raw name '
+                                         'provided.').format(name),
+                                        ch_core.hookenv.WARN)
+                    packages.append(name)
+                    continue
+
+                # The regex doesn't remove the trailing ':' so strip it out
+                # before adding it to the list of packages
+                packages.extend([p[:-1] for p in results])
+
+        return packages
 
     @property
     def packages(self):
@@ -564,6 +597,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True,
             universal_newlines=True)
         ch_core.hookenv.log(cp, level=ch_core.hookenv.INFO)
+        return cp
 
     def get_certificate_requests(self):
         """Override default certificate request handler.

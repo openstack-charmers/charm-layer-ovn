@@ -133,10 +133,11 @@ options:
       .
       By default, only the runtime libraries that are recommended with the
       dpdk libraries are installed. Environments that need additional libraries
-      installed should include those library packages. For example, to enable
-      the pmd-bnx2x runtime library specify the name of the software package
-      `librte-pmd-bnx2x20.0`. To enable the pmd-bnx2x and the pmd-ice runtime
-      libraries, specify the value as `librte-pmd-bnx2x20.0 librte-pmd-ice20.0`.
+      installed should include those library packages. The runtime libraries can
+      be defined either by the full package name (e.g. librte-pmd-bnx2x20.0)
+      or by the simple name (e.g. bnx2x). When providing the simple name, a
+      search is done of the apt-cache for a name matching `librte-*<name>*`
+      for installation and will install all matching packages that are found.
       .
       Only used when DPDK is enabled.
   enable-hardware-offload:

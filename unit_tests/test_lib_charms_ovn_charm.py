@@ -14,6 +14,7 @@
 
 import collections
 import io
+import textwrap
 import unittest.mock as mock
 
 import charms_openstack.charm.core as chm_core
@@ -445,7 +446,7 @@ class TestWallabyOVNChassisCharm(Helper):
 class TestDPDKOVNChassisCharmExtraLibs(Helper):
 
     def setUp(self):
-        super().setUp(config={
+        self.local_config = {
             'enable-hardware-offload': False,
             'enable-sriov': False,
             'enable-dpdk': True,
@@ -455,12 +456,102 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
             'ovn-bridge-mappings': (
                 'provider:br-ex other:br-data'),
             'prefer-chassis-as-gw': False,
-            'dpdk-runtime-libraries': 'librte-pmd-hinic20.0 None',
-        })
+            'dpdk-runtime-libraries': '',
+        }
+        super().setUp(config=self.local_config)
 
-    def test__init__(self):
-        self.assertEquals(self.target.packages, [
-            'ovn-host', 'openvswitch-switch-dpdk', 'librte-pmd-hinic20.0'])
+        self.run = mock.Mock()
+        self.patch('charms.ovn_charm.BaseOVNChassisCharm.run',
+                   new_callable=self.run)
+        self.run.start()
+        self.called_process = self.run.return_value
+        self.called_process.returncode = 0
+
+    def test_single_match(self):
+        apt_cache_output = textwrap.dedent(
+        """
+        librte-net-hinic21:
+          Installed: 20.11.3-0ubuntu0.21.04.2
+          Candidate: 20.11.3-0ubuntu0.21.04.2
+          Version table:
+         *** 20.11.3-0ubuntu0.21.04.2 500
+                500 http://us.archive.ubuntu.com/ubuntu hirsute-updates/universe amd64 Packages
+                100 /var/lib/dpkg/status
+             20.11.1-1 500
+                500 http://us.archive.ubuntu.com/ubuntu hirsute/universe amd64 Packages
+        """  # noqa
+        )
+        self.called_process.stdout = apt_cache_output
+
+        self.local_config['dpdk-runtime-libraries'] = 'hinic'
+        target = ovn_charm.BaseUssuriOVNChassisCharm()
+        self.assertEquals(target.additional_dpdk_libraries, [
+            'librte-net-hinic21'])
+        self.assertEquals(target.packages, [
+            'ovn-host', 'openvswitch-switch-dpdk', 'librte-net-hinic21'])
+
+    def test_multiple_matches(self):
+        apt_cache_output = textwrap.dedent(
+        """
+        librte-net-mlx5-21:
+          Installed: 20.11.3-0ubuntu0.21.04.2
+          Candidate: 20.11.3-0ubuntu0.21.04.2
+          Version table:
+         *** 20.11.3-0ubuntu0.21.04.2 500
+                500 http://us.archive.ubuntu.com/ubuntu hirsute-updates/main amd64 Packages
+                100 /var/lib/dpkg/status
+             20.11.1-1 500
+                500 http://us.archive.ubuntu.com/ubuntu hirsute/main amd64 Packages
+        librte-regex-mlx5-21:
+          Installed: 20.11.3-0ubuntu0.21.04.2
+          Candidate: 20.11.3-0ubuntu0.21.04.2
+          Version table:
+         *** 20.11.3-0ubuntu0.21.04.2 500
+                500 http://us.archive.ubuntu.com/ubuntu hirsute-updates/universe amd64 Packages
+                100 /var/lib/dpkg/status
+             20.11.1-1 500
+                500 http://us.archive.ubuntu.com/ubuntu hirsute/universe amd64 Packages
+        librte-common-mlx5-21:
+          Installed: 20.11.3-0ubuntu0.21.04.2
+          Candidate: 20.11.3-0ubuntu0.21.04.2
+          Version table:
+         *** 20.11.3-0ubuntu0.21.04.2 500
+                500 http://us.archive.ubuntu.com/ubuntu hirsute-updates/main amd64 Packages
+                100 /var/lib/dpkg/status
+             20.11.1-1 500
+                500 http://us.archive.ubuntu.com/ubuntu hirsute/main amd64 Packages
+        librte-vdpa-mlx5-21:
+          Installed: 20.11.3-0ubuntu0.21.04.2
+          Candidate: 20.11.3-0ubuntu0.21.04.2
+          Version table:
+         *** 20.11.3-0ubuntu0.21.04.2 500
+                500 http://us.archive.ubuntu.com/ubuntu hirsute-updates/universe amd64 Packages
+                100 /var/lib/dpkg/status
+             20.11.1-1 500
+                500 http://us.archive.ubuntu.com/ubuntu hirsute/universe amd64 Packages
+        """  # noqa
+        )
+        self.called_process.stdout = apt_cache_output
+
+        self.local_config['dpdk-runtime-libraries'] = 'mlx5'
+        target = ovn_charm.BaseUssuriOVNChassisCharm()
+        self.assertEquals(target.additional_dpdk_libraries, [
+            'librte-net-mlx5-21', 'librte-regex-mlx5-21',
+            'librte-common-mlx5-21', 'librte-vdpa-mlx5-21'])
+
+    def test_specific_package(self):
+        self.local_config['dpdk-runtime-libraries'] = 'librte-net-mlx5-21'
+        target = ovn_charm.BaseUssuriOVNChassisCharm()
+        self.assertEquals(target.additional_dpdk_libraries, [
+            'librte-net-mlx5-21'])
+        self.run.assert_not_called()
+
+    def test_package_not_found(self):
+        # Missing packages don't have output via this command
+        self.called_process.stdout = ''
+        self.local_config['dpdk-runtime-libraries'] = 'missing'
+        target = ovn_charm.BaseUssuriOVNChassisCharm()
+        self.assertEquals(target.additional_dpdk_libraries, ['missing'])
 
 
 class TestDPDKOVNChassisCharm(Helper):
