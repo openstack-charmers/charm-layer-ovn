@@ -943,3 +943,19 @@ class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
         'ovsdb-server']
     nrpe_check_openstack_services = [
         'neutron-ovn-metadata-agent']
+
+
+class BaseWallabyOVNChassisCharm(BaseOVNChassisCharm):
+    """Wallaby incarnation of the OVN Chassis base charm class."""
+    abstract_class = True
+    openstack_packages = ['neutron-ovn-metadata-agent', 'openstack-release']
+    openstack_services = ['neutron-ovn-metadata-agent']
+    openstack_restart_map = {
+        '/etc/neutron/neutron_ovn_metadata_agent.ini': [
+            'neutron-ovn-metadata-agent']}
+    nrpe_check_base_services = [
+        'ovn-controller',
+        'ovs-vswitchd',
+        'ovsdb-server']
+    nrpe_check_openstack_services = [
+        'neutron-ovn-metadata-agent']
