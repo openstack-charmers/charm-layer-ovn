@@ -337,6 +337,11 @@ class Helper(test_utils.PatchHelper):
             self.patch(
                 'charms.ovn_charm.BaseTrainOVNChassisCharm.enable_openstack',
                 new_callable=self.enable_openstack)
+        elif release and release == 'wallaby':
+            self.target = ovn_charm.BaseWallabyOVNChassisCharm()
+            self.patch(
+                'charms.ovn_charm.BaseWallabyOVNChassisCharm.enable_openstack',
+                new_callable=self.enable_openstack)
         else:
             self.target = ovn_charm.BaseUssuriOVNChassisCharm()
             self.patch(
@@ -399,6 +404,30 @@ class TestUssuriOVNChassisCharm(Helper):
     def test_optional_openstack_metadata_ussuri(self):
         self.assertEquals(self.target.packages, [
             'ovn-host', 'neutron-ovn-metadata-agent'
+        ])
+        self.assertEquals(self.target.services, [
+            'ovn-host', 'neutron-ovn-metadata-agent'])
+        self.assertDictEqual(self.target.restart_map, {
+            '/etc/default/openvswitch-switch': [],
+            '/etc/neutron/neutron_ovn_metadata_agent.ini': [
+                'neutron-ovn-metadata-agent'],
+            '/etc/openvswitch/system-id.conf': [],
+        })
+        self.assertEquals(self.target.nrpe_check_services, [
+            'ovn-controller', 'ovs-vswitchd', 'ovsdb-server',
+            'neutron-ovn-metadata-agent'])
+
+
+class TestWallabyOVNChassisCharm(Helper):
+
+    def setUp(self):
+        super().setUp(release='wallaby')
+        self.enable_openstack.return_value = True
+
+    def test_optional_openstack_metadata_wallaby(self):
+        self.assertEquals(self.target.packages, [
+            'ovn-host', 'neutron-ovn-metadata-agent',
+            'openstack-release',
         ])
         self.assertEquals(self.target.services, [
             'ovn-host', 'neutron-ovn-metadata-agent'])
