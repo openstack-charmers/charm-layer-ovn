@@ -63,7 +63,7 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'provide_chassis_certificates_to_principal': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'ovsdb-subordinate.available',
-                    'certificates.available'),
+                    'ovn.certs.changed'),
             },
             'when_none': {
                 'amqp_connection': ('charm.paused', 'is-update-status-hook'),

@@ -593,6 +593,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 tls_object['cert'],
                                 tls_object['key'],
                                 cn='host')
+            reactive.set_flag('ovn.certs.changed')
             break
         else:
             ch_core.hookenv.log('No certificate with CN matching hostname '

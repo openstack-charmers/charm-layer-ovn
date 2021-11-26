@@ -133,7 +133,7 @@ def configure_nrpe():
 @reactive.when_none('charm.paused', 'is-update-status-hook')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                'ovsdb-subordinate.available',
-               'certificates.available')
+               'ovn.certs.changed')
 def provide_chassis_certificates_to_principal():
     ovsdb_subordinate = reactive.endpoint_from_flag(
         'ovsdb-subordinate.available')
@@ -156,4 +156,7 @@ def provide_chassis_certificates_to_principal():
                     ovn_key.read())
     except OSError as e:
         ch_core.hookenv.log('Unable to provide principal with '
-                            'chassis certificates: "{}"'.format(str(e)))
+                            'chassis certificates: "{}"'.format(str(e)),
+                            level=ch_core.hookenv.WARNING)
+
+    reactive.clear_flag('ovn.certs.changed')
