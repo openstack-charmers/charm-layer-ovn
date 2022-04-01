@@ -25,6 +25,7 @@ import charmhelpers.contrib.openstack.context as os_context
 import charmhelpers.contrib.network.ovs as ch_ovs
 import charmhelpers.contrib.network.ovs.ovsdb as ch_ovsdb
 import charmhelpers.contrib.openstack.deferred_events as deferred_events
+import charmhelpers.fetch as ch_fetch
 
 import charms_openstack.adapters
 import charms_openstack.charm
@@ -279,6 +280,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         'ovsdb-server']
     nrpe_check_openstack_services = [
         'neutron-ovn-metadata-agent']
+    purge_packages = ['mlnx-switchdev-mode', 'sriov-netplan-shim']
 
     @property
     def nrpe_check_services(self):
@@ -359,20 +361,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         if self.options.enable_dpdk:
             _packages.extend(['openvswitch-switch-dpdk'])
             _packages.extend(self.additional_dpdk_libraries)
-        if self.options.enable_hardware_offload or self.options.enable_sriov:
-            # The ``sriov-netplan-shim`` package does boot-time
-            # configuration of Virtual Functions (VFs) in the system.
-            #
-            # The charm does not do run-time configuration of VFs as this
-            # would be detrimental to any instances consuming the VFs. In some
-            # configurations it would also break NIC firmware LP: #1908351.
-            #
-            # NOTE: We consume the ``sriov-netplan-shim`` package both as a
-            # charm wheel for the PCI Python library parts and as a deb for
-            # the system init script and configuration tools.
-            _packages.append('sriov-netplan-shim')
-            if self.options.enable_hardware_offload:
-                _packages.append('mlnx-switchdev-mode')
         if self.enable_openstack:
             if self.options.enable_sriov:
                 _packages.append('neutron-sriov-agent')
@@ -422,6 +410,11 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         _restart_map = {
             '/etc/openvswitch/system-id.conf': [],
             '/etc/default/openvswitch-switch': [],
+            # Netplan config snippets will be rendered when SR-IOV or Hardware
+            # Offload is enabled.  However we always want to render the file
+            # to ensure configuration is removed when any of those features
+            # are disabled.
+            '/etc/netplan/150-charm-ovn.yaml': [],
         }
         # The ``dpdk`` system init script takes care of binding devices
         # to the driver specified in configuration at run- and boot- time.
@@ -434,10 +427,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         if self.options.enable_dpdk:
             _restart_map.update({
                 '/etc/dpdk/interfaces': ['dpdk']})
-        if self.options.enable_hardware_offload or self.options.enable_sriov:
-            _restart_map.update({
-                '/etc/sriov-netplan-shim/interfaces.yaml': [],
-            })
         if self.enable_openstack:
             _restart_map.update(self.openstack_restart_map)
             if self.options.enable_sriov:
@@ -465,9 +454,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     def install(self):
         """Extend the default install method to handle update-alternatives.
         """
-        if self.options.enable_hardware_offload or self.options.enable_sriov:
-            self.configure_source('networking-tools-source')
-
         super().install()
 
         if (not reactive.is_flag_set('charm.installed') and
@@ -503,6 +489,24 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         else:
             self.run('update-alternatives', '--set', 'ovs-vswitchd',
                      '/usr/lib/openvswitch-switch/ovs-vswitchd')
+
+    def upgrade_charm(self):
+        """Remove the now deprecated networking tools PPA if present."""
+        super().upgrade_charm()
+
+        # Remove this now unused charm maintained configuration file
+        try:
+            os.remove('/etc/sriov-netplan-shim/interfaces.yaml')
+        except FileNotFoundError:
+            pass
+
+        # Remove PPA
+        try:
+            os.remove('/etc/apt/sources.list.d/'
+                      'openstack-charmers-ubuntu-networking-tools-focal.list')
+            ch_fetch.apt_update(fatal=True)
+        except FileNotFoundError:
+            pass
 
     def resume(self):
         """Do full hook execution on resume.

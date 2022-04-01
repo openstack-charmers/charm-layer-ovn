@@ -382,6 +382,7 @@ class TestOVNChassisCharmWithOpenStack(Helper):
             'ovn-host', 'neutron-ovn-metadata-agent'])
         self.assertDictEqual(self.target.restart_map, {
             '/etc/default/openvswitch-switch': [],
+            '/etc/netplan/150-charm-ovn.yaml': [],
             '/etc/neutron/neutron_ovn_metadata_agent.ini': [
                 'neutron-ovn-metadata-agent'],
             '/etc/openvswitch/system-id.conf': [],
@@ -595,6 +596,7 @@ class TestDPDKOVNChassisCharm(Helper):
         self.assertDictEqual(self.target.restart_map, {
             '/etc/default/openvswitch-switch': [],
             '/etc/dpdk/interfaces': ['dpdk'],
+            '/etc/netplan/150-charm-ovn.yaml': [],
             '/etc/openvswitch/system-id.conf': [],
         })
 
@@ -1097,12 +1099,11 @@ class TestSRIOVOVNChassisCharm(Helper):
         self.maxDiff = None
         self.assertEquals(self.target.packages, [
             'ovn-host',
-            'sriov-netplan-shim',
             'neutron-sriov-agent',
             'neutron-ovn-metadata-agent',
         ])
         self.assertDictEqual(self.target.restart_map, {
-            '/etc/sriov-netplan-shim/interfaces.yaml': [],
+            '/etc/netplan/150-charm-ovn.yaml': [],
             '/etc/default/openvswitch-switch': [],
             '/etc/neutron/neutron.conf': ['neutron-sriov-agent'],
             '/etc/neutron/plugins/ml2/sriov_agent.ini': [
@@ -1127,8 +1128,6 @@ class TestSRIOVOVNChassisCharm(Helper):
         self.patch_object(ovn_charm.ch_core.hookenv, 'config')
         self.config.return_value = None
         self.target.install()
-        self.configure_source.assert_called_once_with(
-            'networking-tools-source')
         self.render_configs.assert_called_once_with(
             ['/etc/default/openvswitch-switch'])
         self.service_restart.assert_called_once_with(
@@ -1149,11 +1148,9 @@ class TestHWOffloadChassisCharm(Helper):
     def test__init__(self):
         self.assertEquals(self.target.packages, [
             'ovn-host',
-            'sriov-netplan-shim',
-            'mlnx-switchdev-mode',
         ])
         self.assertDictEqual(self.target.restart_map, {
-            '/etc/sriov-netplan-shim/interfaces.yaml': [],
+            '/etc/netplan/150-charm-ovn.yaml': [],
             '/etc/default/openvswitch-switch': [],
             '/etc/openvswitch/system-id.conf': [],
         })
@@ -1164,8 +1161,6 @@ class TestHWOffloadChassisCharm(Helper):
         self.patch_target('run')
         self.patch_target('update_api_ports')
         self.target.install()
-        self.configure_source.assert_called_once_with(
-            'networking-tools-source')
 
     def test_configure_ovs_hw_offload(self):
         self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')

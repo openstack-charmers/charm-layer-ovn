@@ -169,14 +169,6 @@ options:
       option allows instances to be plugged into directly into SR-IOV VF
       devices connected to underlying provider networks alongside the default
       Open vSwitch networking options.
-  networking-tools-source:
-    type: string
-    default: ppa:openstack-charmers/networking-tools
-    description: |
-      Package archive source to use for utilities associated with configuring
-      SR-IOV VF's and switchdev mode in Mellanox network adapters.
-      .
-      This PPA can be mirrored for offline deployments.
   ovn-bridge-mappings:
     type: string
     default:
