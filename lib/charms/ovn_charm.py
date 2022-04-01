@@ -267,7 +267,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     valid_config = True
     # Extra packages and services to be installed, managed and monitored if
     # charm forms part of an Openstack Deployment
-    openstack_packages = ['neutron-ovn-metadata-agent', 'openstack-release']
+    openstack_packages = ['neutron-ovn-metadata-agent']
     openstack_services = ['neutron-ovn-metadata-agent']
     openstack_restart_map = {
         '/etc/neutron/neutron_ovn_metadata_agent.ini': [

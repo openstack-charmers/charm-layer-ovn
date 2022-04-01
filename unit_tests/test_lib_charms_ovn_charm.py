@@ -377,7 +377,6 @@ class TestOVNChassisCharmWithOpenStack(Helper):
     def test_optional_openstack_metadata(self):
         self.assertEquals(self.target.packages, [
             'ovn-host', 'neutron-ovn-metadata-agent',
-            'openstack-release',
         ])
         self.assertEquals(self.target.services, [
             'ovn-host', 'neutron-ovn-metadata-agent'])
@@ -1101,7 +1100,6 @@ class TestSRIOVOVNChassisCharm(Helper):
             'sriov-netplan-shim',
             'neutron-sriov-agent',
             'neutron-ovn-metadata-agent',
-            'openstack-release',
         ])
         self.assertDictEqual(self.target.restart_map, {
             '/etc/sriov-netplan-shim/interfaces.yaml': [],
