@@ -333,21 +333,10 @@ class Helper(test_utils.PatchHelper):
         self.config.side_effect = _fake_config
         self.enable_openstack = mock.PropertyMock
         self.enable_openstack.return_value = False
-        if release and release == 'train':
-            self.target = ovn_charm.BaseTrainOVNChassisCharm()
-            self.patch(
-                'charms.ovn_charm.BaseTrainOVNChassisCharm.enable_openstack',
-                new_callable=self.enable_openstack)
-        elif release and release == 'wallaby':
-            self.target = ovn_charm.BaseWallabyOVNChassisCharm()
-            self.patch(
-                'charms.ovn_charm.BaseWallabyOVNChassisCharm.enable_openstack',
-                new_callable=self.enable_openstack)
-        else:
-            self.target = ovn_charm.BaseUssuriOVNChassisCharm()
-            self.patch(
-                'charms.ovn_charm.BaseUssuriOVNChassisCharm.enable_openstack',
-                new_callable=self.enable_openstack)
+        self.target = ovn_charm.BaseOVNChassisCharm()
+        self.patch(
+            'charms.ovn_charm.BaseOVNChassisCharm.enable_openstack',
+            new_callable=self.enable_openstack)
         # remove the 'is_flag_set' patch so the tests can use it
         self._patches['is_flag_set'].stop()
         setattr(self, 'is_flag_set', None)
@@ -379,61 +368,21 @@ class Helper(test_utils.PatchHelper):
         setattr(self, attr, started)
 
 
-class TestTrainOVNChassisCharm(Helper):
-
-    def setUp(self):
-        super().setUp(release='train')
-        self.enable_openstack.return_value = True
-
-    def test_optional_openstack_metadata_train(self):
-        self.assertEquals(self.target.packages, [
-            'ovn-host', 'networking-ovn-metadata-agent', 'haproxy'
-        ])
-        self.assertEquals(self.target.services, [
-            'ovn-host', 'networking-ovn-metadata-agent'])
-        self.assertEquals(self.target.nrpe_check_services, [
-            'ovn-host', 'ovs-vswitchd', 'ovsdb-server',
-            'networking-ovn-metadata-agent'])
-
-
-class TestUssuriOVNChassisCharm(Helper):
+class TestOVNChassisCharmWithOpenStack(Helper):
 
     def setUp(self):
         super().setUp()
         self.enable_openstack.return_value = True
 
-    def test_optional_openstack_metadata_ussuri(self):
-        self.assertEquals(self.target.packages, [
-            'ovn-host', 'neutron-ovn-metadata-agent'
-        ])
-        self.assertEquals(self.target.services, [
-            'ovn-host', 'neutron-ovn-metadata-agent'])
-        self.assertDictEqual(self.target.restart_map, {
-            '/etc/default/openvswitch-switch': [],
-            '/etc/neutron/neutron_ovn_metadata_agent.ini': [
-                'neutron-ovn-metadata-agent'],
-            '/etc/openvswitch/system-id.conf': [],
-        })
-        self.assertEquals(self.target.nrpe_check_services, [
-            'ovn-controller', 'ovs-vswitchd', 'ovsdb-server',
-            'neutron-ovn-metadata-agent'])
-
-
-class TestWallabyOVNChassisCharm(Helper):
-
-    def setUp(self):
-        super().setUp(release='wallaby')
-        self.enable_openstack.return_value = True
-
-    def test_optional_openstack_metadata_wallaby(self):
+    def test_optional_openstack_metadata(self):
         self.assertEquals(self.target.packages, [
             'ovn-host', 'neutron-ovn-metadata-agent',
-            'openstack-release',
         ])
         self.assertEquals(self.target.services, [
             'ovn-host', 'neutron-ovn-metadata-agent'])
         self.assertDictEqual(self.target.restart_map, {
             '/etc/default/openvswitch-switch': [],
+            '/etc/netplan/150-charm-ovn.yaml': [],
             '/etc/neutron/neutron_ovn_metadata_agent.ini': [
                 'neutron-ovn-metadata-agent'],
             '/etc/openvswitch/system-id.conf': [],
@@ -484,7 +433,7 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
         self.called_process.stdout = apt_cache_output
 
         self.local_config['dpdk-runtime-libraries'] = 'hinic'
-        target = ovn_charm.BaseUssuriOVNChassisCharm()
+        target = ovn_charm.BaseOVNChassisCharm()
         self.assertEquals(target.additional_dpdk_libraries, [
             'librte-net-hinic21'])
         self.assertEquals(target.packages, [
@@ -534,21 +483,21 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
         self.called_process.stdout = apt_cache_output
 
         self.local_config['dpdk-runtime-libraries'] = 'mlx5'
-        target = ovn_charm.BaseUssuriOVNChassisCharm()
+        target = ovn_charm.BaseOVNChassisCharm()
         self.assertEquals(target.additional_dpdk_libraries, [
             'librte-net-mlx5-21', 'librte-regex-mlx5-21',
             'librte-common-mlx5-21', 'librte-vdpa-mlx5-21'])
 
     def test_specific_package(self):
         self.local_config['dpdk-runtime-libraries'] = 'librte-net-mlx5-21'
-        target = ovn_charm.BaseUssuriOVNChassisCharm()
+        target = ovn_charm.BaseOVNChassisCharm()
         self.assertEquals(target.additional_dpdk_libraries, [
             'librte-net-mlx5-21'])
         self.run.assert_not_called()
 
     def test_none_package(self):
         self.local_config['dpdk-runtime-libraries'] = 'None'
-        target = ovn_charm.BaseUssuriOVNChassisCharm()
+        target = ovn_charm.BaseOVNChassisCharm()
         self.assertEquals(target.additional_dpdk_libraries, [])
         self.run.assert_not_called()
 
@@ -612,7 +561,7 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
         self.run.side_effect = [process1, process2]
 
         self.local_config['dpdk-runtime-libraries'] = 'hinic mlx'
-        target = ovn_charm.BaseUssuriOVNChassisCharm()
+        target = ovn_charm.BaseOVNChassisCharm()
         self.assertEquals(target.additional_dpdk_libraries, [
             'librte-net-hinic21', 'librte-net-mlx5-21', 'librte-regex-mlx5-21',
             'librte-common-mlx5-21', 'librte-vdpa-mlx5-21'])
@@ -621,7 +570,7 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
         # Missing packages don't have output via this command
         self.called_process.stdout = ''
         self.local_config['dpdk-runtime-libraries'] = 'missing'
-        target = ovn_charm.BaseUssuriOVNChassisCharm()
+        target = ovn_charm.BaseOVNChassisCharm()
         self.assertEquals(target.additional_dpdk_libraries, ['missing'])
 
 
@@ -647,6 +596,7 @@ class TestDPDKOVNChassisCharm(Helper):
         self.assertDictEqual(self.target.restart_map, {
             '/etc/default/openvswitch-switch': [],
             '/etc/dpdk/interfaces': ['dpdk'],
+            '/etc/netplan/150-charm-ovn.yaml': [],
             '/etc/openvswitch/system-id.conf': [],
         })
 
@@ -1149,12 +1099,11 @@ class TestSRIOVOVNChassisCharm(Helper):
         self.maxDiff = None
         self.assertEquals(self.target.packages, [
             'ovn-host',
-            'sriov-netplan-shim',
             'neutron-sriov-agent',
             'neutron-ovn-metadata-agent',
         ])
         self.assertDictEqual(self.target.restart_map, {
-            '/etc/sriov-netplan-shim/interfaces.yaml': [],
+            '/etc/netplan/150-charm-ovn.yaml': [],
             '/etc/default/openvswitch-switch': [],
             '/etc/neutron/neutron.conf': ['neutron-sriov-agent'],
             '/etc/neutron/plugins/ml2/sriov_agent.ini': [
@@ -1179,8 +1128,6 @@ class TestSRIOVOVNChassisCharm(Helper):
         self.patch_object(ovn_charm.ch_core.hookenv, 'config')
         self.config.return_value = None
         self.target.install()
-        self.configure_source.assert_called_once_with(
-            'networking-tools-source')
         self.render_configs.assert_called_once_with(
             ['/etc/default/openvswitch-switch'])
         self.service_restart.assert_called_once_with(
@@ -1201,11 +1148,9 @@ class TestHWOffloadChassisCharm(Helper):
     def test__init__(self):
         self.assertEquals(self.target.packages, [
             'ovn-host',
-            'sriov-netplan-shim',
-            'mlnx-switchdev-mode',
         ])
         self.assertDictEqual(self.target.restart_map, {
-            '/etc/sriov-netplan-shim/interfaces.yaml': [],
+            '/etc/netplan/150-charm-ovn.yaml': [],
             '/etc/default/openvswitch-switch': [],
             '/etc/openvswitch/system-id.conf': [],
         })
@@ -1216,8 +1161,6 @@ class TestHWOffloadChassisCharm(Helper):
         self.patch_target('run')
         self.patch_target('update_api_ports')
         self.target.install()
-        self.configure_source.assert_called_once_with(
-            'networking-tools-source')
 
     def test_configure_ovs_hw_offload(self):
         self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
