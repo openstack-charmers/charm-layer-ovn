@@ -256,12 +256,6 @@ class OVNChassisCharmRelationAdapters(
 class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     """Base class for the OVN Chassis charms."""
     abstract_class = True
-    package_codenames = {
-        'ovn-host': collections.OrderedDict([
-            ('2', 'train'),
-            ('20', 'ussuri'),
-        ]),
-    }
     nova_vhost_user_file = '/etc/tmpfiles.d/nova-ovs-vhost-user.conf'
     release_pkg = 'ovn-host'
     adapters_class = OVNChassisCharmRelationAdapters
@@ -271,14 +265,20 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
     valid_config = True
-    # Services to be monitored by nrpe
-    nrpe_check_base_services = []
     # Extra packages and services to be installed, managed and monitored if
     # charm forms part of an Openstack Deployment
-    openstack_packages = []
-    openstack_services = []
-    openstack_restart_map = {}
-    nrpe_check_openstack_services = []
+    openstack_packages = ['neutron-ovn-metadata-agent', 'openstack-release']
+    openstack_services = ['neutron-ovn-metadata-agent']
+    openstack_restart_map = {
+        '/etc/neutron/neutron_ovn_metadata_agent.ini': [
+            'neutron-ovn-metadata-agent']}
+    # Services to be monitored by nrpe
+    nrpe_check_base_services = [
+        'ovn-controller',
+        'ovs-vswitchd',
+        'ovsdb-server']
+    nrpe_check_openstack_services = [
+        'neutron-ovn-metadata-agent']
 
     @property
     def nrpe_check_services(self):
@@ -958,45 +958,3 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         nrpe.add_init_service_checks(
             charm_nrpe, self.nrpe_check_services, current_unit)
         charm_nrpe.write()
-
-
-class BaseTrainOVNChassisCharm(BaseOVNChassisCharm):
-    """Train incarnation of the OVN Chassis base charm class."""
-    abstract_class = True
-    openstack_packages = ['networking-ovn-metadata-agent', 'haproxy']
-    openstack_services = ['networking-ovn-metadata-agent']
-    openstack_restart_map = {
-        '/etc/neutron/networking_ovn_metadata_agent.ini': [
-            'networking-ovn-metadata-agent']}
-    nrpe_check_base_services = [
-        'ovn-host',
-        'ovs-vswitchd',
-        'ovsdb-server']
-    nrpe_check_openstack_services = [
-        'networking-ovn-metadata-agent']
-
-    @staticmethod
-    def ovn_sysconfdir():
-        return '/etc/openvswitch'
-
-
-class BaseUssuriOVNChassisCharm(BaseOVNChassisCharm):
-    """Ussuri incarnation of the OVN Chassis base charm class."""
-    abstract_class = True
-    openstack_packages = ['neutron-ovn-metadata-agent']
-    openstack_services = ['neutron-ovn-metadata-agent']
-    openstack_restart_map = {
-        '/etc/neutron/neutron_ovn_metadata_agent.ini': [
-            'neutron-ovn-metadata-agent']}
-    nrpe_check_base_services = [
-        'ovn-controller',
-        'ovs-vswitchd',
-        'ovsdb-server']
-    nrpe_check_openstack_services = [
-        'neutron-ovn-metadata-agent']
-
-
-class BaseWallabyOVNChassisCharm(BaseUssuriOVNChassisCharm):
-    """Wallaby incarnation of the OVN Chassis base charm class."""
-    abstract_class = True
-    openstack_packages = ['neutron-ovn-metadata-agent', 'openstack-release']
