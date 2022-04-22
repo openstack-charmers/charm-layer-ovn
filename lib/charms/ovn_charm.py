@@ -742,12 +742,16 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                          ('dpdk-extra',
                           self.dpdk_eal_allow_devices(dpdk_context.devices())),
                          ):
-                if row.get(other_config_fmt.format(k)) != v:
+                other_config = row.get('other_config', {})
+                if other_config.get(k) != v:
                     something_changed = True
                     if v:
                         opvs.set('.', other_config_fmt.format(k), v)
-                    else:
+                    elif k in other_config:
                         opvs.remove('.', 'other_config', k)
+                    else:
+                        # NOT REACHED
+                        pass
         return something_changed
 
     def configure_ovs_hw_offload(self):
@@ -763,12 +767,16 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             for k, v in (('hw-offload', 'true'),
                          ('max-idle', '30000'),
                          ):
-                if row.get(other_config_fmt.format(k)) != v:
+                other_config = row.get('other_config', {})
+                if other_config.get(k) != v:
                     something_changed = True
                     if v:
                         opvs.set('.', other_config_fmt.format(k), v)
-                    else:
+                    elif k in other_config:
                         opvs.remove('.', 'other_config', k)
+                    else:
+                        # NOT REACHED
+                        pass
         return something_changed
 
     def configure_ovs(self, sb_conn, mlockall_changed):

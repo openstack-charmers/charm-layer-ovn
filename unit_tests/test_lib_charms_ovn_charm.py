@@ -741,6 +741,52 @@ class TestDPDKOVNChassisCharm(Helper):
             self.target.dpdk_eal_allow_devices(devices),
             '-w 0000:42:01.0 -w 0000:42:02.0')
 
+    def test_configure_ovs_dpdk(self):
+        dpdk_context = mock.MagicMock()
+        self.patch_object(ovn_charm.os_context, 'OVSDPDKDeviceContext',
+                          return_value=dpdk_context)
+        self.patch_target('dpdk_eal_allow_devices')
+        self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
+        opvs = mock.MagicMock()
+        self.SimpleOVSDB.return_value = opvs
+
+        # No existing config, confirm restart and values set as expected
+        opvs.open_vswitch.__iter__.return_value = [
+            {'other_config': {}}]
+        dpdk_context.cpu_mask.return_value = '0x42'
+        dpdk_context.socket_memory.return_value = '1024,1024'
+        self.dpdk_eal_allow_devices.return_value = '-a 0000:42:01.0'
+        self.assertTrue(self.target.configure_ovs_dpdk())
+        opvs.open_vswitch.set.assert_has_calls([
+            mock.call('.', 'other_config:dpdk-lcore-mask', '0x42'),
+            mock.call('.', 'other_config:dpdk-socket-mem', '1024,1024'),
+            mock.call('.', 'other_config:dpdk-init', 'true'),
+            mock.call('.', 'other_config:dpdk-extra', '-a 0000:42:01.0'),
+        ])
+
+        # Existing config, confirm no restart nor values set
+        opvs.open_vswitch.__iter__.return_value = [
+            {'other_config': {
+                'dpdk-lcore-mask': '0x42',
+                'dpdk-socket-mem': '1024,1024',
+                'dpdk-init': 'true',
+                'dpdk-extra': '-a 0000:42:01.0',
+            }}]
+        opvs.open_vswitch.reset_mock()
+        self.assertFalse(self.target.configure_ovs_dpdk())
+
+        # Existing config, confirm restart and values updated as expected
+        opvs.open_vswitch.__iter__.return_value = [
+            {'other_config': {
+                'dpdk-lcore-mask': '0x51',
+                'dpdk-socket-mem': '1024,1024',
+                'dpdk-init': 'true',
+                'dpdk-extra': '-a 0000:42:01.0',
+            }}]
+        self.assertTrue(self.target.configure_ovs_dpdk())
+        opvs.open_vswitch.set.assert_called_once_with(
+            '.', 'other_config:dpdk-lcore-mask', '0x42')
+
 
 class TestOVNChassisCharm(Helper):
 
@@ -1190,24 +1236,30 @@ class TestHWOffloadChassisCharm(Helper):
     def test_configure_ovs_hw_offload(self):
         self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
         ovsdb = mock.MagicMock()
-        ovsdb.open_vswitch.__iter__.return_value = [
-            dict([('other_config:hw-offload', 'true'),
-                  ('other_config:max-idle', '30000')]),
-        ]
+        ovsdb.open_vswitch.__iter__.return_value = [{
+            'other_config': {
+                'hw-offload': 'true',
+                'max-idle': '30000',
+            },
+        }]
         self.SimpleOVSDB.return_value = ovsdb
         self.assertFalse(self.target.configure_ovs_hw_offload())
         ovsdb.open_vswitch.set.assert_not_called()
-        ovsdb.open_vswitch.__iter__.return_value = [
-            dict([('other_config:hw-offload', 'false'),
-                  ('other_config:max-idle', '30000')]),
-        ]
+        ovsdb.open_vswitch.__iter__.return_value = [{
+            'other_config': {
+                'hw-offload': 'false',
+                'max-idle': '30000',
+            },
+        }]
         self.assertTrue(self.target.configure_ovs_hw_offload())
         ovsdb.open_vswitch.set.assert_called_once_with(
             '.', 'other_config:hw-offload', 'true')
-        ovsdb.open_vswitch.__iter__.return_value = [
-            dict([('other_config:hw-offload', 'true'),
-                  ('other_config:max-idle', '42')]),
-        ]
+        ovsdb.open_vswitch.__iter__.return_value = [{
+            'other_config': {
+                'hw-offload': 'true',
+                'max-idle': '42',
+            },
+        }]
         ovsdb.open_vswitch.set.reset_mock()
         self.assertTrue(self.target.configure_ovs_hw_offload())
         ovsdb.open_vswitch.set.assert_called_once_with(
