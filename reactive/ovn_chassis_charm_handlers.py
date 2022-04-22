@@ -64,21 +64,6 @@ def disable_openstack():
 
 
 @reactive.when_none('charm.paused', 'is-update-status-hook')
-@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
-               'config.changed.enable-hardware-offload')
-def ensure_networking_tools_installed():
-    """Ensure the networking tools are installed.
-
-    If the charm is used without OpenStack and hardware offload is enabled
-    post deploy the package may not be installed until we get here.
-    """
-    with charm.provide_charm_instance() as charm_instance:
-        charm_instance.install()
-        charm_instance.assess_status()
-        reactive.clear_flag('config.changed.enable-hardware-offload')
-
-
-@reactive.when_none('charm.paused', 'is-update-status-hook')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'nova-compute.connected')
 def enable_openstack():
     reactive.set_flag('charm.ovn-chassis.enable-openstack')
