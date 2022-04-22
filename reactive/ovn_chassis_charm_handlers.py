@@ -75,14 +75,6 @@ def enable_openstack():
 
 
 @reactive.when_none('charm.paused', 'is-update-status-hook')
-@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'config.rendered')
-def configure_bridges():
-    with charm.provide_charm_instance() as charm_instance:
-        charm_instance.configure_bridges()
-        charm_instance.assess_status()
-
-
-@reactive.when_none('charm.paused', 'is-update-status-hook')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                'ovsdb.available',
                'certificates.available')
@@ -100,6 +92,7 @@ def configure_ovs():
             ','.join(ovsdb.db_sb_connection_strs),
             reactive.is_flag_set('config.changed.disable-mlockall'))
         reactive.set_flag('config.rendered')
+        charm_instance.configure_bridges()
         charm_instance.assess_status()
 
 
