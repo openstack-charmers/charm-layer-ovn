@@ -665,7 +665,7 @@ class TestDPDKOVNChassisCharm(Helper):
         self.del_bridge.assert_called_once_with('delete-bridge')
         # since we manage it we will delete non-existant managed ports in it
         self.del_bridge_port.assert_has_calls([
-            mock.call('br-int', 'delete-port'),
+            mock.call('br-int', 'delete-port', linkdown=False),
         ])
         # br-int will always be added/updated regardless of presence in config
         self.add_bridge.assert_has_calls([
@@ -976,8 +976,8 @@ class TestOVNChassisCharm(Helper):
         self.del_bridge.assert_called_once_with('delete-bridge')
         # since we manage it we will delete non-existant managed ports in it
         self.del_bridge_port.assert_has_calls([
-            mock.call('br-other', 'delete-port'),
-            mock.call('br-int', 'delete-port'),
+            mock.call('br-other', 'delete-port', linkdown=True),
+            mock.call('br-int', 'delete-port', linkdown=True),
         ])
         # br-int will always be added/updated regardless of presence in config
         self.add_bridge.assert_has_calls([

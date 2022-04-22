@@ -878,7 +878,10 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                             .format(port['name'],
                                                     bridge['name']),
                                             level=ch_core.hookenv.DEBUG)
-                        ch_ovs.del_bridge_port(bridge['name'], port['name'])
+                        ch_ovs.del_bridge_port(
+                            bridge['name'],
+                            port['name'],
+                            linkdown=not self.options.enable_dpdk)
         brdata = {
             'external-ids': {'charm-ovn-chassis': 'managed'},
             'protocols': 'OpenFlow13,OpenFlow15',
