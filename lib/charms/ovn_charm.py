@@ -280,7 +280,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         'ovsdb-server']
     nrpe_check_openstack_services = [
         'neutron-ovn-metadata-agent']
-    purge_packages = ['mlnx-switchdev-mode', 'sriov-netplan-shim']
 
     @property
     def nrpe_check_services(self):
@@ -366,6 +365,21 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 _packages.append('neutron-sriov-agent')
             _packages.extend(self.openstack_packages)
         return _packages
+
+    @property
+    def purge_packages(self):
+        """Packages to purge.
+
+        This is a property instead of a class variable because we need to
+        determine the list of packages to purge at runtime.
+
+        :returns: List of packages to purge
+        :rtype: List[str]
+        """
+        _purge_packages = ['mlnx-switchdev-mode', 'sriov-netplan-shim']
+        if not self.options.enable_dpdk:
+            _purge_packages.extend(['openvswitch-switch-dpdk'])
+        return _purge_packages
 
     @property
     def group(self):
@@ -489,6 +503,9 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         else:
             self.run('update-alternatives', '--set', 'ovs-vswitchd',
                      '/usr/lib/openvswitch-switch/ovs-vswitchd')
+            if (reactive.is_flag_set('config.changed.enable-dpdk') and
+                    self.remove_obsolete_packages()):
+                ch_core.host.service_restart('openvswitch-switch')
 
     def upgrade_charm(self):
         """Remove the now deprecated networking tools PPA if present."""
@@ -735,13 +752,22 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             bridges_key=self.bridges_key)
         opvs = ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch
         other_config_fmt = 'other_config:{}'
+        kv_pairs = (
+            ('dpdk-lcore-mask',
+             dpdk_context.cpu_mask()
+             if self.options.enable_dpdk else None),
+            ('dpdk-socket-mem',
+             dpdk_context.socket_memory()
+             if self.options.enable_dpdk else None),
+            ('dpdk-init',
+             'true'
+             if self.options.enable_dpdk else None),
+            ('dpdk-extra',
+             self.dpdk_eal_allow_devices(dpdk_context.devices())
+             if self.options.enable_dpdk else None),
+        )
         for row in opvs:
-            for k, v in (('dpdk-lcore-mask', dpdk_context.cpu_mask()),
-                         ('dpdk-socket-mem', dpdk_context.socket_memory()),
-                         ('dpdk-init', 'true'),
-                         ('dpdk-extra',
-                          self.dpdk_eal_allow_devices(dpdk_context.devices())),
-                         ):
+            for k, v in (kv_pairs):
                 other_config = row.get('other_config', {})
                 if other_config.get(k) != v:
                     something_changed = True
@@ -763,10 +789,16 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         something_changed = False
         opvs = ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch
         other_config_fmt = 'other_config:{}'
+        kv_pairs = (
+            ('hw-offload',
+             'true'
+             if self.options.enable_hardware_offload else None),
+            ('max-idle',
+             '30000'
+             if self.options.enable_hardware_offload else None),
+        )
         for row in opvs:
-            for k, v in (('hw-offload', 'true'),
-                         ('max-idle', '30000'),
-                         ):
+            for k, v in (kv_pairs):
                 other_config = row.get('other_config', {})
                 if other_config.get(k) != v:
                     something_changed = True
@@ -845,10 +877,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                          '--', 'add', 'Open_vSwitch', '.', 'manager_options',
                          '@manager')
 
-        if self.options.enable_hardware_offload:
-            restart_required = self.configure_ovs_hw_offload()
-        elif self.options.enable_dpdk:
-            restart_required = self.configure_ovs_dpdk()
+        restart_required = (
+            self.configure_ovs_hw_offload() | self.configure_ovs_dpdk())
         if restart_required:
             ch_core.host.service_restart('openvswitch-switch')
 
