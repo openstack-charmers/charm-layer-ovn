@@ -704,6 +704,26 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         for row in ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch:
             return row['external_ids']['hostname']
 
+    def dpdk_eal_allow_devices(self, devices):
+        """Build EAL command line argument for allowed devices.
+
+        :param devices: PCI devices for use by DPDK
+        :type devices: collections.OrderedDict[str,Tuple[str,str]]
+        :returns: Command line arguments for use with DPDK EAL.
+        :rtype: str
+        """
+        if ch_core.host.cmp_pkgrevno('dpdk', '20.11.3') >= 0:
+            flag = '-a'
+        else:
+            # The allow argument changed at DPDK 20.11
+            # https://github.com/DPDK/dpdk/commit/db27370b57202632ad8830352c1c0ee2dde4542f
+            flag = '-w'
+
+        return ' '.join([
+            flag + ' ' + device
+            for device in devices
+        ])
+
     def configure_ovs_dpdk(self):
         """Configure DPDK specific bits in Open vSwitch.
 
@@ -719,7 +739,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             for k, v in (('dpdk-lcore-mask', dpdk_context.cpu_mask()),
                          ('dpdk-socket-mem', dpdk_context.socket_memory()),
                          ('dpdk-init', 'true'),
-                         ('dpdk-extra', dpdk_context.pci_whitelist()),
+                         ('dpdk-extra',
+                          self.dpdk_eal_allow_devices(dpdk_context.devices())),
                          ):
                 if row.get(other_config_fmt.format(k)) != v:
                     something_changed = True

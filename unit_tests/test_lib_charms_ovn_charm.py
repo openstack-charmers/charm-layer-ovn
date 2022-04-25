@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import collections
+import copy
 import io
 import textwrap
 import unittest.mock as mock
@@ -715,6 +716,30 @@ class TestDPDKOVNChassisCharm(Helper):
             'other:br-data,provider:br-ex')
         ovsdb.open_vswitch.remove.assert_called_once_with(
             '.', 'external_ids', 'ovn-cms-options=enable-chassis-as-gw')
+
+    def test_dpdk_eal_allow_devices(self):
+        self.patch_object(ovn_charm.ch_core.host, 'cmp_pkgrevno')
+        single_device = {'0000:42:01.0': ('eth0', '00:53:00:00:42:01')}
+        devices = copy.copy(single_device)
+        devices.update({'0000:42:02.0': ('eth1', '00:53:00:00:42:02')})
+
+        # DPDK 20.11.3 or newer
+        self.cmp_pkgrevno.return_value = 0
+        self.assertEquals(
+            self.target.dpdk_eal_allow_devices(single_device),
+            '-a 0000:42:01.0')
+        self.assertEquals(
+            self.target.dpdk_eal_allow_devices(devices),
+            '-a 0000:42:01.0 -a 0000:42:02.0')
+
+        # Older DPDK releases
+        self.cmp_pkgrevno.return_value = -1
+        self.assertEquals(
+            self.target.dpdk_eal_allow_devices(single_device),
+            '-w 0000:42:01.0')
+        self.assertEquals(
+            self.target.dpdk_eal_allow_devices(devices),
+            '-w 0000:42:01.0 -w 0000:42:02.0')
 
 
 class TestOVNChassisCharm(Helper):
