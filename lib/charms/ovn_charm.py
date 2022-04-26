@@ -13,6 +13,8 @@
 # limitations under the License.
 import collections
 import ipaddress
+import json
+import jsonschema
 import os
 import re
 import subprocess
@@ -192,6 +194,13 @@ class OVNConfigurationAdapter(
         if (ch_core.hookenv.config('enable-hardware-offload') or
                 ch_core.hookenv.config('enable-sriov')):
             self._sriov_device = os_context.SRIOVContext()
+        self._bridge_port_interfaces = None
+        self._card_serial_number = None
+        self._validation_errors = {}
+
+    @property
+    def validation_errors(self):
+        return self._validation_errors
 
     @property
     def ovn_key(self):
@@ -233,6 +242,92 @@ class OVNConfigurationAdapter(
                 self._disable_mlockall = True
         return self._disable_mlockall
 
+    @property
+    def bridge_port_interfaces(self):
+        try:
+            return os_context.BridgePortInterfaceMap(
+                bridges_key=self.charm_instance.bridges_key)
+        except ValueError:
+            self._validation_errors[self.charm_instance.bridges_key] = (
+                'Wrong format for bridge-interface-mappings. '
+                'Expected format is space-delimited list of '
+                'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
+                'br-provider:enp3s0f0"')
+            return None
+
+    @property
+    def card_serial_number(self):
+        """Determine the NIC card serial number based on charm config"""
+        # Empty spec.
+        if not self.vpd_device_spec:
+            return None
+
+        if self._card_serial_number:
+            return self._card_serial_number
+        try:
+            spec = json.loads(self.vpd_device_spec)
+        except json.JSONDecodeError:
+            self._validation_errors['vpd-device-spec'] = (
+                'Invalid JSON provided for VPD device spec:'
+                f' {self.vpd_device_spec}')
+            return None
+
+        schema = {
+            'type': 'array',
+            'items': {'type': 'object',
+                      'properties': {
+                          'bus': {
+                              'type': 'string',
+                              'pattern': '^pci$'},
+                          'vendor_id': {
+                              'type': 'string',
+                              'pattern': '^([\\da-fA-F]{4})$'},
+                          'device_id': {
+                              'type': 'string',
+                              'pattern': '^([\\da-fA-F]{4})$'}},
+                      'required': [
+                          'bus',
+                          'vendor_id',
+                          'device_id']}
+        }
+        try:
+            jsonschema.validate(spec, schema)
+        except jsonschema.ValidationError:
+            self._validation_errors['vpd-device-spec'] = (
+                'Invalid VPD device spec does not match the schema: '
+                f'{self.vpd_device_spec}')
+            return None
+
+        # There can be one or multiple specs specified. We iterate over those
+        # assuming that one charm may be deployed on machines with different
+        # hardware present. The order of the items in the spec list shows the
+        # precedence an operator wishes to use in case devices matching
+        # multiple specs are present on one host. However, considering DPUs
+        # will mainly be the target machines here, one device per machine is
+        # a likely case.
+        specs = json.loads(self.vpd_device_spec)
+        for spec in specs:
+            vendor_id = spec['vendor_id']
+            device_id = spec['device_id']
+            out = subprocess.check_output(['lspci', '-d',
+                                           f'{vendor_id}:{device_id}', '-vv'])
+            # If a device is not present the output will be empty.
+            if not out:
+                continue
+
+            serials = re.findall(r'\[SN\] Serial number: (?P<serial>\S+)',
+                                 str(out), re.MULTILINE)
+            if serials:
+                # Assume we only have one chip per card for now since all DPUs
+                # we have seen so far are like this - just take the first
+                # occurrence of a serial number for now even if there are
+                # multiple devices representing ports exposed by one chip.
+                return serials[0]
+            # If a serial number isn't exposed on a matching device, we try
+            # other specs just in case by iterating further.
+        # Tried all the specs - but haven't found a serial number.
+        return None
+
 
 class NeutronPluginRelationAdapter(
         charms_openstack.adapters.OpenStackRelationAdapter):
@@ -265,7 +360,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     python_version = 3
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
-    valid_config = True
     # Extra packages and services to be installed, managed and monitored if
     # charm forms part of an Openstack Deployment
     openstack_packages = ['neutron-ovn-metadata-agent']
@@ -555,12 +649,12 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         :rtype: (status, message) or (None, None)
         """
 
-        if not self.valid_config:
-            message = ('Wrong format for bridge-interface-mappings. '
-                       'Expected format is space-delimited list of '
-                       'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
-                       'br-provider:enp3s0f0"')
-            return 'blocked', message
+        if self.options.validation_errors:
+            status_msg = ', '.join([
+                f'{k}: "{msg}"' for k, msg
+                in self.options.validation_errors.items()
+            ])
+            return 'blocked', status_msg
 
         return None, None
 
@@ -889,14 +983,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 'port interface configuration tasks.',
                                 level=ch_core.hookenv.INFO)
             return
-        try:
-            bpi = os_context.BridgePortInterfaceMap(
-                bridges_key=self.bridges_key
-            )
-            self.valid_config = True
-
-        except ValueError:
-            self.valid_config = False
+        bpi = self.options.bridge_port_interfaces
+        if not bpi:
             return
 
         bond_config = os_context.BondConfig()
@@ -1002,12 +1090,20 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         else:
             opvs.remove('.', 'external_ids', 'ovn-bridge-mappings')
 
-        if self.options.prefer_chassis_as_gw:
-            opvs.set(
-                '.', 'external_ids:ovn-cms-options', 'enable-chassis-as-gw')
+        cms_opts = self._format_ovn_cms_options()
+        if cms_opts:
+            opvs.set('.', 'external_ids:ovn-cms-options', ','.join(cms_opts))
         else:
-            opvs.remove(
-                '.', 'external_ids', 'ovn-cms-options=enable-chassis-as-gw')
+            opvs.remove('.', 'external_ids', 'ovn-cms-options')
+
+    def _format_ovn_cms_options(self):
+        cms_opts = []
+        if self.options.prefer_chassis_as_gw:
+            cms_opts.append('enable-chassis-as-gw')
+        if self.options.card_serial_number:
+            cms_opts.append(
+                f'card-serial-number={self.options.card_serial_number}')
+        return cms_opts
 
     def render_nrpe(self):
         """Configure Nagios NRPE checks."""

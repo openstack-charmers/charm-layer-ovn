@@ -297,3 +297,24 @@ options:
       .
       Changing this config option will restart openvswitch-switch, resulting
       in an expected data plane outage while the service restarts.
+  vpd-device-spec:
+    type: string
+    default:
+    description: |
+      A list of specs used by the charm to identify a device to be used as a
+      primary source of Vital Product Data (VPD) containing a NIC serial number.
+      This option can be used to enable SmartNIC DPU support.
+      .
+      Based on the retrieved information the charm will set up a mapping between
+      a chassis hostname and a unique card serial number of a NIC in the OVN
+      southbound database. It can then used by the CMS to look up which chassis
+      should service a port plugging request based on the information provided
+      from a hypervisor host.
+      .
+      Multiple items can be specified in the list in order to allow for
+      hosts with different kinds of hardware or to specify the order of
+      precedence if multiple devices from the list are present on a host. This
+      should not normally happen with DPUs that only have one chip exposed.
+      .
+      Examples: [{"bus": "pci", "vendor_id": "15b3", "product_id": "a2d6" },
+

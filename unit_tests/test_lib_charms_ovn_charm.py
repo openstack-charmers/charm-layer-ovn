@@ -299,6 +299,111 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
         self._test_mlock_d(config_rv=None, container_rv=False, mlock_rv=False)
 
 
+class TestOVNConfigurationAdapterSerial(test_utils.PatchHelper):
+
+    def setUp(self):
+        super().setUp()
+        self.charm_instance = mock.MagicMock()
+        self.patch_object(ovn_charm.ch_core.hookenv, 'config')
+
+        def _config_side_effect(k=None):
+            opts = {
+                'enable-hardware-offload': False,
+                'enable-sriov': False,
+                'enable-dpdk': False,
+                'vpd-device-spec':
+                '[{"bus": "pci", "vendor_id": "b3ef", "device_id": "caf3"}]',
+            }
+            return opts[k] if k else opts
+
+        self.config.side_effect = _config_side_effect
+
+        self.target = ovn_charm.OVNConfigurationAdapter(
+            charm_instance=self.charm_instance)
+
+    def test_card_serial_no_serial_in_lspci(self):
+        self.patch_object(ovn_charm.subprocess, 'check_output')
+        self.check_output.return_value = ''
+        self.assertIsNone(self.target.card_serial_number)
+
+    def test_card_serial_valid_serial(self):
+        self.patch_object(ovn_charm.subprocess, 'check_output')
+        self.check_output.return_value = r'''
+03:00.1 Ethernet controller: Ubuntu DPU Super Series
+	Subsystem: Ubuntu network controller
+	Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort-
+	Latency: 0
+	Interrupt: pin A routed to IRQ 78
+	Region 0: Memory at e202000000 (64-bit, prefetchable) [size=32M]
+	Expansion ROM at e000100000 [disabled] [size=1M]
+	Capabilities: [48] Vital Product Data
+		Product Name: Ubuntu DPU Super Series
+		Read-only fields:
+			[PN] Part number: jammy-jellyfish
+			[EC] Engineering changes: B1
+			[SN] Serial number: deadbeefcafe
+			[V3] Vendor specific: 22.04
+			[V0] Vendor specific: PCIeGen4 x8
+			[RV] Reserved: checksum good, 1 byte(s) reserved
+		End
+        '''  # noqa: W191, E101  to represent the real-world lspci output.
+        self.assertEquals(self.target.card_serial_number, 'deadbeefcafe')
+
+    def test_card_serial_no_spec(self):
+        def _config_side_effect(k=None):
+            opts = {
+                'enable-hardware-offload': False,
+                'enable-sriov': False,
+                'enable-dpdk': False,
+                'vpd-device-spec': ''
+            }
+            return opts[k] if k else opts
+
+        self.config.side_effect = _config_side_effect
+
+        self.target = ovn_charm.OVNConfigurationAdapter(
+            charm_instance=self.charm_instance)
+
+        self.assertIsNone(self.target.card_serial_number)
+
+    def test_card_serial_invalid_spec(self):
+        invalid_specs = [
+            '{', '{}',
+            # Not a JSON array:
+            '{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}',
+            # Bus isn't specified:
+            '["vendor_id": "beef", "device_id": "cafe"}]',
+            # Invalid device key:
+            '{"bus": "pci", "vendor_id": "beef", "device": "cafe"}]',
+            # Invalid device value:
+            '[{"bus": "pci", "vendor_id": "beef", "device_id": 3453}]',
+            # Invalid vendor key:
+            '[{"bus": "pci", "vendor": "beef", "device_id": "cafe"}]',
+            # Invalid vendor value:
+            '[{"bus": "pci", "vendor": 6334, "device_id": "cafe"}]',
+            # Missing device key:
+            '[{"bus": "pci", "vendor_id": "beef"}]',
+            # Missing vendor key:
+            '[{"bus": "pci", "device_id": "cafe"}]',
+        ]
+
+        for invalid_spec in invalid_specs:
+            def _config_side_effect(k=None):
+                opts = {
+                    'enable-hardware-offload': False,
+                    'enable-sriov': False,
+                    'enable-dpdk': False,
+                    'vpd-device-spec': invalid_spec
+                }
+                return opts[k] if k else opts
+
+            self.config.side_effect = _config_side_effect
+            self.target = ovn_charm.OVNConfigurationAdapter(
+                charm_instance=self.charm_instance)
+            self.assertIsNone(self.target.card_serial_number)
+
+
 class Helper(test_utils.PatchHelper):
 
     def setUp(self, release=None, is_flag_set_return_value=False, config=None):
@@ -326,6 +431,8 @@ class Helper(test_utils.PatchHelper):
                 'enable-dpdk': False,
                 'bridge-interface-mappings': 'br-ex:eth0',
                 'prefer-chassis-as-gw': False,
+                'vpd-device-spec':
+                '[{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}]',
             }
             if x:
                 return cfg.get(x)
@@ -407,6 +514,7 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
                 'provider:br-ex other:br-data'),
             'prefer-chassis-as-gw': False,
             'dpdk-runtime-libraries': '',
+            'vpd-device-spec': '',
         }
         super().setUp(config=self.local_config)
 
@@ -589,6 +697,7 @@ class TestDPDKOVNChassisCharm(Helper):
                 'provider:br-ex other:br-data'),
             'prefer-chassis-as-gw': False,
             'dpdk-runtime-libraries': '',
+            'vpd-device-spec': '',
         })
 
     def test__init__(self):
@@ -715,7 +824,7 @@ class TestDPDKOVNChassisCharm(Helper):
             '.', 'external_ids:ovn-bridge-mappings',
             'other:br-data,provider:br-ex')
         ovsdb.open_vswitch.remove.assert_called_once_with(
-            '.', 'external_ids', 'ovn-cms-options=enable-chassis-as-gw')
+            '.', 'external_ids', 'ovn-cms-options')
 
     def test_dpdk_eal_allow_devices(self):
         self.patch_object(ovn_charm.ch_core.host, 'cmp_pkgrevno')
@@ -833,6 +942,8 @@ class TestOVNChassisCharm(Helper):
             'ovn-bridge-mappings': (
                 'provider:br-provider other:br-other'),
             'prefer-chassis-as-gw': True,
+            'vpd-device-spec':
+            '[{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}]',
         })
 
     def test_optional_openstack_metadata(self):
@@ -1062,6 +1173,10 @@ class TestOVNChassisCharm(Helper):
         ovsdb.port.find.return_value = [{'name': 'delete-port'}]
         self.SimpleOVSDB.return_value = ovsdb
 
+        self.patch_object(ovn_charm.OVNConfigurationAdapter,
+                          'card_serial_number', new_callable=mock.PropertyMock)
+        self.card_serial_number.return_value = 'c4rd-53r14l'
+
         self.patch_object(ovn_charm.ch_ovs, 'del_bridge')
         self.patch_object(ovn_charm.ch_ovs, 'del_bridge_port')
         self.patch_object(ovn_charm.ch_ovs, 'add_bridge')
@@ -1129,36 +1244,64 @@ class TestOVNChassisCharm(Helper):
             mock.call('.', 'external_ids:ovn-bridge-mappings',
                       'other:br-other,provider:br-provider'),
             mock.call('.', 'external_ids:ovn-cms-options',
-                      'enable-chassis-as-gw'),
+                      'enable-chassis-as-gw,card-serial-number=c4rd-53r14l'),
         ], any_order=True)
 
     def test_wrong_configure_bridges(self):
-        # test that when ValueError raises, changes valid_config to False
         self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
         self.BridgePortInterfaceMap.side_effect = ValueError()
         self.patch_target('check_if_paused')
         self.check_if_paused.return_value = (None, None)
-        self.assertEqual(self.target.valid_config, True)
+        self.assertEqual(self.target.custom_assess_status_last_check(),
+                         (None, None))
         self.target.configure_bridges()
         self.BridgePortInterfaceMap.assert_called_once_with(
             bridges_key='bridge-interface-mappings')
-        self.assertEqual(self.target.valid_config, False)
 
-    def test_custom_assess_status_last_check(self):
-        self.target.valid_config = False
-        message = ('Wrong format for bridge-interface-mappings. '
-                   'Expected format is space-delimited list of '
-                   'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
-                   'br-provider:enp3s0f0"')
-        self.assertEquals(
+        expected_msg = ('"Wrong format for bridge-interface-mappings. '
+                        'Expected format is space-delimited list of '
+                        'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
+                        'br-provider:enp3s0f0""')
+
+        self.assertEqual(
             self.target.custom_assess_status_last_check(),
-            ('blocked', message)
+            ('blocked', f'{self.target.bridges_key}: {expected_msg}'))
+
+    def test_wrong_vpd_spec(self):
+        self.target.options.vpd_device_spec = '{'
+        self.patch_target('check_if_paused')
+        self.check_if_paused.return_value = (None, None)
+        self.assertEqual(self.target.custom_assess_status_last_check(),
+                         (None, None))
+        self.assertIsNone(self.target.options.card_serial_number)
+
+        self.assertEqual(
+            self.target.custom_assess_status_last_check(),
+            ('blocked',
+             'vpd-device-spec: "Invalid JSON provided for VPD device spec: {"')
         )
-        # test when bridge config is right
-        self.target.valid_config = True
-        self.assertEquals(
+
+    def test_wrong_multiple(self):
+        """Test rendering of multiple config validation errors"""
+        self.target.options.vpd_device_spec = '{'
+        self.patch_target('check_if_paused')
+        self.check_if_paused.return_value = (None, None)
+        self.assertEqual(self.target.custom_assess_status_last_check(),
+                         (None, None))
+        self.assertIsNone(self.target.options.card_serial_number)
+
+        self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
+        self.BridgePortInterfaceMap.side_effect = ValueError()
+        self.target.configure_bridges()
+
+        self.assertEqual(
             self.target.custom_assess_status_last_check(),
-            (None, None)
+            ('blocked',
+             'vpd-device-spec: "Invalid JSON provided for VPD device spec: {",'
+             ' bridge-interface-mappings: "Wrong format for'
+             ' bridge-interface-mappings. Expected format is space-delimited'
+             ' list of key-value pairs. Ex: "br-internet:00:00:5e:00:00:42'
+             ' br-provider:enp3s0f0""')
         )
 
     def test_states_to_check(self):

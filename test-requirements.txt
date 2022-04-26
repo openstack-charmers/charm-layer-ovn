@@ -9,4 +9,6 @@ pep8>=1.7.0
 flake8>=2.2.4
 stestr
 
+jsonschema
+
 git+https://github.com/openstack/charms.openstack.git#egg=charms.openstack
