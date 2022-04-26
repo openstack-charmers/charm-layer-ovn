@@ -297,3 +297,14 @@ options:
       .
       Changing this config option will restart openvswitch-switch, resulting
       in an expected data plane outage while the service restarts.
+  card-serial-number:
+    type: string
+    default:
+    description: |
+      A card serial number of a networking controller present in its Vital
+      Product Data (VPD). This option can be used to enable SmartNIC DPU support.
+      .
+      Used to set up a mapping between a chassis hostname and a unique card serial
+      number of a NIC in the southbound database. This can then used by the CMS
+      to look up which chassis should service a port plugging request based on the
+      information provided from a hypervisor host.

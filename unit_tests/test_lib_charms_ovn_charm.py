@@ -325,6 +325,7 @@ class Helper(test_utils.PatchHelper):
                 'enable-dpdk': False,
                 'bridge-interface-mappings': 'br-ex:eth0',
                 'prefer-chassis-as-gw': False,
+                'card-serial-number': 'c4rd-53r14l',
             }
             if x:
                 return cfg.get(x)
@@ -406,6 +407,7 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
                 'provider:br-ex other:br-data'),
             'prefer-chassis-as-gw': False,
             'dpdk-runtime-libraries': '',
+            'card-serial-number': '',
         }
         super().setUp(config=self.local_config)
 
@@ -588,6 +590,7 @@ class TestDPDKOVNChassisCharm(Helper):
                 'provider:br-ex other:br-data'),
             'prefer-chassis-as-gw': False,
             'dpdk-runtime-libraries': '',
+            'card-serial-number': '',
         })
 
     def test__init__(self):
@@ -714,7 +717,7 @@ class TestDPDKOVNChassisCharm(Helper):
             '.', 'external_ids:ovn-bridge-mappings',
             'other:br-data,provider:br-ex')
         ovsdb.open_vswitch.remove.assert_called_once_with(
-            '.', 'external_ids', 'ovn-cms-options=enable-chassis-as-gw')
+            '.', 'external_ids', 'ovn-cms-options')
 
 
 class TestOVNChassisCharm(Helper):
@@ -729,6 +732,7 @@ class TestOVNChassisCharm(Helper):
             'ovn-bridge-mappings': (
                 'provider:br-provider other:br-other'),
             'prefer-chassis-as-gw': True,
+            'card-serial-number': 'c4rd-53r14l',
         })
 
     def test_optional_openstack_metadata(self):
@@ -1025,7 +1029,7 @@ class TestOVNChassisCharm(Helper):
             mock.call('.', 'external_ids:ovn-bridge-mappings',
                       'other:br-other,provider:br-provider'),
             mock.call('.', 'external_ids:ovn-cms-options',
-                      'enable-chassis-as-gw'),
+                      'enable-chassis-as-gw,card-serial-number=c4rd-53r14l'),
         ], any_order=True)
 
     def test_wrong_configure_bridges(self):
