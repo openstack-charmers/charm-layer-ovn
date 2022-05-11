@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import collections
+import copy
 import io
 import textwrap
 import unittest.mock as mock
@@ -665,7 +666,7 @@ class TestDPDKOVNChassisCharm(Helper):
         self.del_bridge.assert_called_once_with('delete-bridge')
         # since we manage it we will delete non-existant managed ports in it
         self.del_bridge_port.assert_has_calls([
-            mock.call('br-int', 'delete-port'),
+            mock.call('br-int', 'delete-port', linkdown=False),
         ])
         # br-int will always be added/updated regardless of presence in config
         self.add_bridge.assert_has_calls([
@@ -715,6 +716,109 @@ class TestDPDKOVNChassisCharm(Helper):
             'other:br-data,provider:br-ex')
         ovsdb.open_vswitch.remove.assert_called_once_with(
             '.', 'external_ids', 'ovn-cms-options=enable-chassis-as-gw')
+
+    def test_dpdk_eal_allow_devices(self):
+        self.patch_object(ovn_charm.ch_core.host, 'cmp_pkgrevno')
+        single_device = {'0000:42:01.0': ('eth0', '00:53:00:00:42:01')}
+        devices = copy.copy(single_device)
+        devices.update({'0000:42:02.0': ('eth1', '00:53:00:00:42:02')})
+
+        # DPDK 20.11.3 or newer
+        self.cmp_pkgrevno.return_value = 0
+        self.assertEquals(
+            self.target.dpdk_eal_allow_devices(single_device),
+            '-a 0000:42:01.0')
+        self.assertEquals(
+            self.target.dpdk_eal_allow_devices(devices),
+            '-a 0000:42:01.0 -a 0000:42:02.0')
+
+        # Older DPDK releases
+        self.cmp_pkgrevno.return_value = -1
+        self.assertEquals(
+            self.target.dpdk_eal_allow_devices(single_device),
+            '-w 0000:42:01.0')
+        self.assertEquals(
+            self.target.dpdk_eal_allow_devices(devices),
+            '-w 0000:42:01.0 -w 0000:42:02.0')
+
+    def test_configure_ovs_dpdk(self):
+        dpdk_context = mock.MagicMock()
+        self.patch_object(ovn_charm.os_context, 'OVSDPDKDeviceContext',
+                          return_value=dpdk_context)
+        self.patch_target('dpdk_eal_allow_devices')
+        self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
+        opvs = mock.MagicMock()
+        self.SimpleOVSDB.return_value = opvs
+
+        # No existing config, confirm restart and values set as expected
+        opvs.open_vswitch.__iter__.return_value = [
+            {'other_config': {}}]
+        dpdk_context.cpu_mask.return_value = '0x42'
+        dpdk_context.socket_memory.return_value = '1024,1024'
+        self.dpdk_eal_allow_devices.return_value = '-a 0000:42:01.0'
+        self.assertTrue(self.target.configure_ovs_dpdk())
+        opvs.open_vswitch.set.assert_has_calls([
+            mock.call('.', 'other_config:dpdk-lcore-mask', '0x42'),
+            mock.call('.', 'other_config:dpdk-socket-mem', '1024,1024'),
+            mock.call('.', 'other_config:dpdk-init', 'true'),
+            mock.call('.', 'other_config:dpdk-extra', '-a 0000:42:01.0'),
+        ])
+
+        # Existing config, confirm no restart nor values set
+        opvs.open_vswitch.__iter__.return_value = [
+            {'other_config': {
+                'dpdk-lcore-mask': '0x42',
+                'dpdk-socket-mem': '1024,1024',
+                'dpdk-init': 'true',
+                'dpdk-extra': '-a 0000:42:01.0',
+            }}]
+        opvs.open_vswitch.reset_mock()
+        self.assertFalse(self.target.configure_ovs_dpdk())
+
+        # Existing config, confirm restart and values updated as expected
+        opvs.open_vswitch.__iter__.return_value = [
+            {'other_config': {
+                'dpdk-lcore-mask': '0x51',
+                'dpdk-socket-mem': '1024,1024',
+                'dpdk-init': 'true',
+                'dpdk-extra': '-a 0000:42:01.0',
+            }}]
+        self.assertTrue(self.target.configure_ovs_dpdk())
+        opvs.open_vswitch.set.assert_called_once_with(
+            '.', 'other_config:dpdk-lcore-mask', '0x42')
+
+    def test_purge_packages(self):
+        self.assertEquals(
+            self.target.purge_packages,
+            [
+                'mlnx-switchdev-mode',
+                'sriov-netplan-shim',
+            ])
+
+    def test_install(self):
+        self.patch_target('configure_source')
+        self.patch_target('run')
+        self.patch_target('update_api_ports')
+        self.patch_target('render_configs')
+        self.patch_target('remove_obsolete_packages')
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.patch_object(ovn_charm.reactive, 'is_flag_set', return_value=True)
+        self.patch_object(ovn_charm.os.path, 'exists', return_value=False)
+        self.enable_openstack.return_value = False
+        self.target.install()
+        self.run.assert_called_once_with(
+            'update-alternatives', '--set', 'ovs-vswitchd',
+            '/usr/lib/openvswitch-switch-dpdk/ovs-vswitchd-dpdk')
+
+        # Confirm that vhost-user directory is setup when OpenStack enabled
+        self.run.reset_mock()
+        self.enable_openstack.return_value = True
+        self.target.install()
+        self.run.assert_has_calls([
+            mock.call('update-alternatives', '--set', 'ovs-vswitchd',
+                      '/usr/lib/openvswitch-switch-dpdk/ovs-vswitchd-dpdk'),
+            mock.call('systemd-tmpfiles', '--create'),
+        ])
 
 
 class TestOVNChassisCharm(Helper):
@@ -976,8 +1080,8 @@ class TestOVNChassisCharm(Helper):
         self.del_bridge.assert_called_once_with('delete-bridge')
         # since we manage it we will delete non-existant managed ports in it
         self.del_bridge_port.assert_has_calls([
-            mock.call('br-other', 'delete-port'),
-            mock.call('br-int', 'delete-port'),
+            mock.call('br-other', 'delete-port', linkdown=True),
+            mock.call('br-int', 'delete-port', linkdown=True),
         ])
         # br-int will always be added/updated regardless of presence in config
         self.add_bridge.assert_has_calls([
@@ -1082,6 +1186,89 @@ class TestOVNChassisCharm(Helper):
         self.execl.assert_called_once_with(
             '/usr/bin/env', 'python3', '/some/path/hooks/config-changed')
 
+    def test_purge_packages(self):
+        self.assertEquals(
+            self.target.purge_packages,
+            [
+                'mlnx-switchdev-mode',
+                'sriov-netplan-shim',
+                'openvswitch-switch-dpdk',
+            ])
+
+    def test_install(self):
+        self.patch_target('configure_source')
+        self.patch_target('run')
+        self.patch_target('update_api_ports')
+        self.patch_target('render_configs')
+        self.patch_target('remove_obsolete_packages')
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.patch_object(ovn_charm.reactive, 'is_flag_set',
+                          side_effect=[False, True])
+        self.target.install()
+        self.render_configs.assert_called_once_with(
+            ['/etc/default/openvswitch-switch'])
+        self.service_restart.assert_called_once_with(
+            'openvswitch-switch')
+
+        # Check that Open vSwitch is restarted when DPDK is disabled
+        self.remove_obsolete_packages.return_value = True
+        self.patch_object(ovn_charm.reactive, 'is_flag_set',
+                          side_effect=[False, True])
+        self.service_restart.reset_mock()
+        self.target.install()
+        self.service_restart.assert_has_calls([
+            mock.call('openvswitch-switch'),
+            mock.call('openvswitch-switch'),
+        ])
+
+    def test_configure_ovs_hw_offload(self):
+        # Confirm that config is removed when HW offload is disabled
+        self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
+        ovsdb = mock.MagicMock()
+        ovsdb.open_vswitch.__iter__.return_value = [{
+            'other_config': {
+                'hw-offload': 'true',
+                'max-idle': '30000',
+            },
+        }]
+        self.SimpleOVSDB.return_value = ovsdb
+        self.assertTrue(self.target.configure_ovs_hw_offload())
+        ovsdb.open_vswitch.remove.assert_has_calls([
+            mock.call('.', 'other_config', 'hw-offload'),
+            mock.call('.', 'other_config', 'max-idle'),
+        ])
+
+        # Confirm that we don't request restart when nothing changed
+        ovsdb.open_vswitch.__iter__.return_value = [{
+            'other_config': {'some-other-key-we-dont-care-about': 42}}]
+        self.assertFalse(self.target.configure_ovs_hw_offload())
+
+    def test_configure_ovs_dpdk(self):
+        # Confirm that config is removed when DPDK is disabled
+        self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
+        opvs = mock.MagicMock()
+        self.SimpleOVSDB.return_value = opvs
+
+        # Existing config, confirm restart and values removed as expected
+        opvs.open_vswitch.__iter__.return_value = [
+            {'other_config': {
+                'dpdk-lcore-mask': '0x42',
+                'dpdk-socket-mem': '1024,1024',
+                'dpdk-init': 'true',
+                'dpdk-extra': '-a 0000:42:01.0',
+            }}]
+        self.assertTrue(self.target.configure_ovs_dpdk())
+        opvs.open_vswitch.remove.assert_has_calls([
+            mock.call('.', 'other_config', 'dpdk-lcore-mask'),
+            mock.call('.', 'other_config', 'dpdk-socket-mem'),
+            mock.call('.', 'other_config', 'dpdk-init'),
+            mock.call('.', 'other_config', 'dpdk-extra'),
+        ])
+
+        opvs.open_vswitch.__iter__.return_value = [{
+            'other_config': {'some-other-key-we-dont-care-about': 42}}]
+        self.assertFalse(self.target.configure_ovs_dpdk())
+
 
 class TestSRIOVOVNChassisCharm(Helper):
 
@@ -1122,6 +1309,7 @@ class TestSRIOVOVNChassisCharm(Helper):
         self.patch_target('run')
         self.patch_target('update_api_ports')
         self.patch_target('render_configs')
+        self.patch_target('remove_obsolete_packages')
         self.patch_object(ovn_charm.ch_core.host, 'service_restart')
         self.patch_object(ovn_charm.reactive, 'is_flag_set',
                           return_value=False)
@@ -1165,24 +1353,30 @@ class TestHWOffloadChassisCharm(Helper):
     def test_configure_ovs_hw_offload(self):
         self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
         ovsdb = mock.MagicMock()
-        ovsdb.open_vswitch.__iter__.return_value = [
-            dict([('other_config:hw-offload', 'true'),
-                  ('other_config:max-idle', '30000')]),
-        ]
+        ovsdb.open_vswitch.__iter__.return_value = [{
+            'other_config': {
+                'hw-offload': 'true',
+                'max-idle': '30000',
+            },
+        }]
         self.SimpleOVSDB.return_value = ovsdb
         self.assertFalse(self.target.configure_ovs_hw_offload())
         ovsdb.open_vswitch.set.assert_not_called()
-        ovsdb.open_vswitch.__iter__.return_value = [
-            dict([('other_config:hw-offload', 'false'),
-                  ('other_config:max-idle', '30000')]),
-        ]
+        ovsdb.open_vswitch.__iter__.return_value = [{
+            'other_config': {
+                'hw-offload': 'false',
+                'max-idle': '30000',
+            },
+        }]
         self.assertTrue(self.target.configure_ovs_hw_offload())
         ovsdb.open_vswitch.set.assert_called_once_with(
             '.', 'other_config:hw-offload', 'true')
-        ovsdb.open_vswitch.__iter__.return_value = [
-            dict([('other_config:hw-offload', 'true'),
-                  ('other_config:max-idle', '42')]),
-        ]
+        ovsdb.open_vswitch.__iter__.return_value = [{
+            'other_config': {
+                'hw-offload': 'true',
+                'max-idle': '42',
+            },
+        }]
         ovsdb.open_vswitch.set.reset_mock()
         self.assertTrue(self.target.configure_ovs_hw_offload())
         ovsdb.open_vswitch.set.assert_called_once_with(

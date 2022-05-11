@@ -48,12 +48,6 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'enable_openstack': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'nova-compute.connected',),
-                'ensure_networking_tools_installed': (
-                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
-                    'config.changed.enable-hardware-offload',),
-                'configure_bridges': (
-                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
-                    'config.rendered',),
                 'pause_unit_from_config': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'config.set.new-units-paused'),
@@ -72,12 +66,6 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'is-update-status-hook',
                     'nova-compute.connected',),
                 'enable_openstack': ('charm.paused', 'is-update-status-hook'),
-                'ensure_networking_tools_installed': (
-                    'charm.paused',
-                    'is-update-status-hook'),
-                'configure_bridges': (
-                    'charm.paused',
-                    'is-update-status-hook'),
                 'configure_ovs': ('charm.paused', 'is-update-status-hook'),
                 'pause_unit_from_config': ('charm.installed', 'charm.paused'),
                 'configure_nrpe': (
@@ -163,6 +151,7 @@ class TestOvnHandlers(test_utils.PatchHelper):
                                      'nova-compute.connected',
                                      'amqp.connected'))
         self.set_flag.assert_called_once_with('config.rendered')
+        self.charm.configure_bridges.assert_called_once_with()
         self.charm.assess_status.assert_called_once_with()
 
     def test_configure_nrpe(self):
