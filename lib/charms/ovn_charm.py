@@ -546,7 +546,12 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         )
 
     def custom_assess_status_last_check(self):
-        """Check if has valid bridge config and set to blocked if is invalid.
+        """Override parent method to check bridge config and dpdk mask overlap.
+
+        Check if has valid bridge config and set to blocked if is invalid.
+
+        Check if dpdk-lcore-mask and pmd-cpu-mask overlap in case OVS DPDK is
+        used and set to blocked if overlap detected.
 
         Returns (None, None) if the interfaces are okay, or a status, message
         if the config is invalid.
@@ -560,6 +565,13 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                        'Expected format is space-delimited list of '
                        'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
                        'br-provider:enp3s0f0"')
+            return 'blocked', message
+
+        if self.options.enable_dpdk and self.ovs_dpdk_cpu_overlap_check():
+            ch_core.hookenv.log('Overlap detected between dpdk-lcore-mask '
+                                'and pmd-cpu-mask.',
+                                level=ch_core.hookenv.WARNING)
+            message = 'Fix overlap between dpdk-lcore-mask and pmd-cpu-mask.'
             return 'blocked', message
 
         return None, None
@@ -765,6 +777,10 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             ('dpdk-extra',
              self.dpdk_eal_allow_devices(dpdk_context.devices())
              if self.options.enable_dpdk else None),
+            ('pmd-cpu-mask',
+             dpdk_context.pmd_cpu_mask()
+             if self.options.enable_dpdk and self.options.pmd_cpu_set
+             else None),
         )
         for row in opvs:
             for k, v in (kv_pairs):
@@ -779,6 +795,20 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                         # NOT REACHED
                         pass
         return something_changed
+
+    def ovs_dpdk_cpu_overlap_check(self):
+        """Check for overlap between dpdk-lcore-mask and pmd-cpu-mask.
+
+        :returns: True if an overlap is detected
+        :rtype: bool
+        """
+        overlap_detected = False
+        dpdk_context = os_context.OVSDPDKDeviceContext(
+            bridges_key=self.bridges_key)
+        if (int(dpdk_context.pmd_cpu_mask(), 16) &
+                int(dpdk_context.cpu_mask(), 16)):
+            overlap_detected = True
+        return overlap_detected
 
     def configure_ovs_hw_offload(self):
         """Configure hardware offload specific bits in Open vSwitch.
