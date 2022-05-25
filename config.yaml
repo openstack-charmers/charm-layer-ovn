@@ -207,11 +207,8 @@ options:
 
       Example: 2,4,5-9,^7,16-23,^20,^22
 
-      If this option is not set, the pmd-cpu-mask field in the open_vswitch
-      table will be set to a default mask that is the next cpu of each NUMA
-      node following the dpdk-lcore-mask in order to avoid overlap.
-      .
       Only used when DPDK is enabled.
+
       NOTE: It is recommended to avoid overlap between datapath (pmd-cpu-mask)
       and non-datapath (dpdk-lcore-mask) cpus. The charm will go into blocked
       state if an overlap is detected.
