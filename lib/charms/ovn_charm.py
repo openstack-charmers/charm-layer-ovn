@@ -133,12 +133,18 @@ class DeferredEventMixin():
                                       permitted before running hook.
         :type check_deferred_events: bool
         """
+
+        # Run configure_ovs if config.rendered is not set.
+        # This ensures that configure_ovs hook will run when installing a new
+        # unit even if enable-auto-restarts is set to False LP#1943970
+        config_rendered = reactive.flags.is_flag_set('config.rendered')
+
         changed = reactive.flags.is_flag_set(
             'config.changed.enable-auto-restarts')
         # Run method if enable-auto-restarts has changed, irrespective of what
         # it was changed to. This ensure that this method is not immediately
         # deferred when enable-auto-restarts is initially set to False.
-        if ((not check_deferred_events) or changed or
+        if ((not config_rendered) or (not check_deferred_events) or changed or
                 deferred_events.is_restart_permitted()):
             deferred_events.clear_deferred_hook('configure_ovs')
             super().configure_ovs(sb_conn, mlockall_changed)
@@ -152,12 +158,17 @@ class DeferredEventMixin():
                                       permitted before running hook.
         :type check_deferred_events: bool
         """
+        # Run the install if config.rendered is not set.
+        # This ensures that install hook will run when installing a new
+        # unit even if enable-auto-restarts is set to False LP#1943970
+        config_rendered = reactive.flags.is_flag_set('config.rendered')
+
         changed = reactive.flags.is_flag_set(
             'config.changed.enable-auto-restarts')
         # Run method if enable-auto-restarts has changed, irrespective of what
         # it was changed to. This ensure that this method is not immediately
         # deferred when enable-auto-restarts is initially set to False.
-        if ((not check_deferred_events) or changed or
+        if ((not config_rendered) or (not check_deferred_events) or changed or
                 deferred_events.is_restart_permitted()):
             deferred_events.clear_deferred_hook('install')
             super().install()
