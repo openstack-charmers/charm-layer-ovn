@@ -1099,6 +1099,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             opvs.remove('.', 'external_ids', 'ovn-cms-options')
 
     def _get_ovn_cms_options(self):
+        """Get options to be passed into ovn-cms-options"""
         cms_opts = []
         if self.options.prefer_chassis_as_gw:
             cms_opts.append('enable-chassis-as-gw')
