@@ -194,7 +194,7 @@ class OVNConfigurationAdapter(
         if (ch_core.hookenv.config('enable-hardware-offload') or
                 ch_core.hookenv.config('enable-sriov')):
             self._sriov_device = os_context.SRIOVContext()
-        self._bridge_port_interfaces = None
+        self._bridge_interface_map = None
         self._card_serial_number = None
         self._validation_errors = {}
 
@@ -243,17 +243,19 @@ class OVNConfigurationAdapter(
         return self._disable_mlockall
 
     @property
-    def bridge_port_interfaces(self):
-        try:
-            return os_context.BridgePortInterfaceMap(
-                bridges_key=self.charm_instance.bridges_key)
-        except ValueError:
-            self._validation_errors[self.charm_instance.bridges_key] = (
-                'Wrong format for bridge-interface-mappings. '
-                'Expected format is space-delimited list of '
-                'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
-                'br-provider:enp3s0f0"')
-            return None
+    def bridge_interface_map(self):
+        if not self._bridge_interface_map:
+            try:
+                self._bridge_interface_map = os_context.BridgePortInterfaceMap(
+                    bridges_key=self.charm_instance.bridges_key)
+                return self._bridge_interface_map
+            except ValueError:
+                self._validation_errors[self.charm_instance.bridges_key] = (
+                    'Wrong format for bridge-interface-mappings. '
+                    'Expected format is space-delimited list of '
+                    'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
+                    'br-provider:enp3s0f0"')
+                return None
 
     @property
     def card_serial_number(self):
@@ -640,10 +642,10 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         )
 
     def custom_assess_status_last_check(self):
-        """Check if has valid bridge config and set to blocked if is invalid.
+        """Check if config validation errors are present and block if they are.
 
-        Returns (None, None) if the interfaces are okay, or a status, message
-        if the config is invalid.
+        Returns (None, None) if the config is ok, or a status, message if the
+        config is invalid.
 
         :returns status & message info
         :rtype: (status, message) or (None, None)
@@ -983,12 +985,12 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 'port interface configuration tasks.',
                                 level=ch_core.hookenv.INFO)
             return
-        bpi = self.options.bridge_port_interfaces
-        if not bpi:
+        bim = self.options.bridge_interface_map
+        if not bim:
             return
 
         bond_config = os_context.BondConfig()
-        ch_core.hookenv.log('BridgePortInterfaceMap: "{}"'.format(bpi.items()),
+        ch_core.hookenv.log('BridgePortInterfaceMap: "{}"'.format(bim.items()),
                             level=ch_core.hookenv.DEBUG)
 
         # build map of bridges to ovn networks with existing if-mapping on host
@@ -998,7 +1000,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         config_obm = self.config['ovn-bridge-mappings'] or ''
         for pair in sorted(config_obm.split()):
             network, bridge = pair.split(':', 1)
-            if bridge in bpi:
+            if bridge in bim:
                 ovnbridges[bridge].append(network)
                 if ovn_br_map_str:
                     ovn_br_map_str += ','
@@ -1009,7 +1011,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         for bridge in bridges.find('external_ids:charm-ovn-chassis=managed'):
             # remove bridges and ports that are managed by us and no longer in
             # config
-            if bridge['name'] not in bpi and bridge['name'] != 'br-int':
+            if bridge['name'] not in bim and bridge['name'] != 'br-int':
                 ch_core.hookenv.log('removing bridge "{}" as it is no longer'
                                     'present in configuration for this unit.'
                                     .format(bridge['name']),
@@ -1018,7 +1020,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             else:
                 for port in ports.find('external_ids:charm-ovn-chassis={}'
                                        .format(bridge['name'])):
-                    if port['name'] not in bpi[bridge['name']]:
+                    if port['name'] not in bim[bridge['name']]:
                         ch_core.hookenv.log('removing port "{}" from bridge '
                                             '"{}" as it is no longer present '
                                             'in configuration for this unit.'
@@ -1052,7 +1054,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 'other-config': {'disable-in-band': 'true'},
             },
         })
-        for br in bpi:
+        for br in bim:
             if br not in ovnbridges:
                 continue
             ch_ovs.add_bridge(br, brdata={
@@ -1061,8 +1063,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 # datapath to act like an ordinary MAC-learning switch.
                 **{'fail-mode': 'standalone'},
             })
-            for port in bpi[br]:
-                ifdatamap = bpi.get_ifdatamap(br, port)
+            for port in bim[br]:
+                ifdatamap = bim.get_ifdatamap(br, port)
                 ifdatamap = {
                     port: {
                         **ifdata,
@@ -1090,13 +1092,13 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         else:
             opvs.remove('.', 'external_ids', 'ovn-bridge-mappings')
 
-        cms_opts = self._format_ovn_cms_options()
+        cms_opts = self._get_ovn_cms_options()
         if cms_opts:
             opvs.set('.', 'external_ids:ovn-cms-options', ','.join(cms_opts))
         else:
             opvs.remove('.', 'external_ids', 'ovn-cms-options')
 
-    def _format_ovn_cms_options(self):
+    def _get_ovn_cms_options(self):
         cms_opts = []
         if self.options.prefer_chassis_as_gw:
             cms_opts.append('enable-chassis-as-gw')

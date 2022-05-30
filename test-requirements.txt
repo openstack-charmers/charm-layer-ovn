@@ -9,6 +9,8 @@ pep8>=1.7.0
 flake8>=2.2.4
 stestr
 
+# The dependency is present as we test various inputs to config options
+# (including invalid ones) which are then validated against a schema.
 jsonschema
 
 git+https://github.com/openstack/charms.openstack.git#egg=charms.openstack
