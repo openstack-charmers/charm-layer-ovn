@@ -198,6 +198,20 @@ options:
       NOTE: Values in this configuration option will only have effect for units
       that have a interface referenced in the `bridge-interface-mappings`
       configuration option.
+  pmd-cpu-set:
+    type: string
+    default:
+    description: |
+      Comma separated list of cpus used for DPDK datapath packet processing.
+      The range and caret operators are supported.
+
+      Example: 2,4,5-9,^7,16-23,^20,^22
+
+      Only used when DPDK is enabled.
+
+      NOTE: It is recommended to avoid overlap between datapath (pmd-cpu-mask)
+      and non-datapath (dpdk-lcore-mask) cpus. The charm will go into blocked
+      state if an overlap is detected.
   sriov-device-mappings:
     type: string
     default:

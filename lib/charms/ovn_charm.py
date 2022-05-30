@@ -187,16 +187,17 @@ class OVNConfigurationAdapter(
         self._dpdk_device = None
         self._sriov_device = None
         self._disable_mlockall = None
+        self._validation_errors = {}
         if ch_core.hookenv.config('enable-dpdk'):
             self._dpdk_device = self.OSContextObjectView(
                 os_context.DPDKDeviceContext(
                     bridges_key=self.charm_instance.bridges_key)())
+            self._ovs_dpdk_cpu_overlap_check()
         if (ch_core.hookenv.config('enable-hardware-offload') or
                 ch_core.hookenv.config('enable-sriov')):
             self._sriov_device = os_context.SRIOVContext()
         self._bridge_interface_map = None
         self._card_serial_number = None
-        self._validation_errors = {}
 
     @property
     def validation_errors(self):
@@ -329,6 +330,20 @@ class OVNConfigurationAdapter(
             # other specs just in case by iterating further.
         # Tried all the specs - but haven't found a serial number.
         return None
+
+    def _ovs_dpdk_cpu_overlap_check(self):
+        """Check for overlap between dpdk-lcore-mask and pmd-cpu-mask."""
+        dpdk_context = os_context.OVSDPDKDeviceContext(
+            bridges_key=self.charm_instance.bridges_key)
+        if not (int(dpdk_context.pmd_cpu_mask(), 16) &
+                int(dpdk_context.cpu_mask(), 16)):
+            return
+
+        ch_core.hookenv.log('Overlap detected between dpdk-lcore-mask '
+                            'and pmd-cpu-mask.',
+                            level=ch_core.hookenv.WARNING)
+        self._validation_errors['pmd-cpu-mask'] = (
+            'Fix overlap between dpdk-lcore-mask and pmd-cpu-mask.')
 
 
 class NeutronPluginRelationAdapter(
@@ -658,6 +673,13 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             ])
             return 'blocked', status_msg
 
+        if self.options.enable_dpdk and self.ovs_dpdk_cpu_overlap_check():
+            ch_core.hookenv.log('Overlap detected between dpdk-lcore-mask '
+                                'and pmd-cpu-mask.',
+                                level=ch_core.hookenv.WARNING)
+            message = 'Fix overlap between dpdk-lcore-mask and pmd-cpu-mask.'
+            return 'blocked', message
+
         return None, None
 
     def states_to_check(self, required_relations=None):
@@ -861,6 +883,10 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             ('dpdk-extra',
              self.dpdk_eal_allow_devices(dpdk_context.devices())
              if self.options.enable_dpdk else None),
+            ('pmd-cpu-mask',
+             dpdk_context.pmd_cpu_mask()
+             if self.options.enable_dpdk and self.options.pmd_cpu_set
+             else None),
         )
         for row in opvs:
             for k, v in (kv_pairs):
