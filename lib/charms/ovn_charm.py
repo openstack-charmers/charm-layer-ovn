@@ -13,6 +13,8 @@
 # limitations under the License.
 import collections
 import ipaddress
+import json
+import jsonschema
 import os
 import re
 import subprocess
@@ -185,13 +187,21 @@ class OVNConfigurationAdapter(
         self._dpdk_device = None
         self._sriov_device = None
         self._disable_mlockall = None
+        self._validation_errors = {}
         if ch_core.hookenv.config('enable-dpdk'):
             self._dpdk_device = self.OSContextObjectView(
                 os_context.DPDKDeviceContext(
                     bridges_key=self.charm_instance.bridges_key)())
+            self._ovs_dpdk_cpu_overlap_check()
         if (ch_core.hookenv.config('enable-hardware-offload') or
                 ch_core.hookenv.config('enable-sriov')):
             self._sriov_device = os_context.SRIOVContext()
+        self._bridge_interface_map = None
+        self._card_serial_number = None
+
+    @property
+    def validation_errors(self):
+        return self._validation_errors
 
     @property
     def ovn_key(self):
@@ -233,6 +243,108 @@ class OVNConfigurationAdapter(
                 self._disable_mlockall = True
         return self._disable_mlockall
 
+    @property
+    def bridge_interface_map(self):
+        if not self._bridge_interface_map:
+            try:
+                self._bridge_interface_map = os_context.BridgePortInterfaceMap(
+                    bridges_key=self.charm_instance.bridges_key)
+                return self._bridge_interface_map
+            except ValueError:
+                self._validation_errors[self.charm_instance.bridges_key] = (
+                    'Wrong format for bridge-interface-mappings. '
+                    'Expected format is space-delimited list of '
+                    'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
+                    'br-provider:enp3s0f0"')
+                return None
+
+    @property
+    def card_serial_number(self):
+        """Determine the NIC card serial number based on charm config"""
+        # Empty spec.
+        if not self.vpd_device_spec:
+            return None
+
+        if self._card_serial_number:
+            return self._card_serial_number
+        try:
+            spec = json.loads(self.vpd_device_spec)
+        except json.JSONDecodeError:
+            self._validation_errors['vpd-device-spec'] = (
+                'Invalid JSON provided for VPD device spec:'
+                f' {self.vpd_device_spec}')
+            return None
+
+        schema = {
+            'type': 'array',
+            'items': {'type': 'object',
+                      'properties': {
+                          'bus': {
+                              'type': 'string',
+                              'pattern': '^pci$'},
+                          'vendor_id': {
+                              'type': 'string',
+                              'pattern': '^([\\da-fA-F]{4})$'},
+                          'device_id': {
+                              'type': 'string',
+                              'pattern': '^([\\da-fA-F]{4})$'}},
+                      'required': [
+                          'bus',
+                          'vendor_id',
+                          'device_id']}
+        }
+        try:
+            jsonschema.validate(spec, schema)
+        except jsonschema.ValidationError:
+            self._validation_errors['vpd-device-spec'] = (
+                'Invalid VPD device spec does not match the schema: '
+                f'{self.vpd_device_spec}')
+            return None
+
+        # There can be one or multiple specs specified. We iterate over those
+        # assuming that one charm may be deployed on machines with different
+        # hardware present. The order of the items in the spec list shows the
+        # precedence an operator wishes to use in case devices matching
+        # multiple specs are present on one host. However, considering DPUs
+        # will mainly be the target machines here, one device per machine is
+        # a likely case.
+        specs = json.loads(self.vpd_device_spec)
+        for spec in specs:
+            vendor_id = spec['vendor_id']
+            device_id = spec['device_id']
+            out = subprocess.check_output(['lspci', '-d',
+                                           f'{vendor_id}:{device_id}', '-vv'])
+            # If a device is not present the output will be empty.
+            if not out:
+                continue
+
+            serials = re.findall(r'\[SN\] Serial number: (?P<serial>\S+)',
+                                 str(out), re.MULTILINE)
+            if serials:
+                # Assume we only have one chip per card for now since all DPUs
+                # we have seen so far are like this - just take the first
+                # occurrence of a serial number for now even if there are
+                # multiple devices representing ports exposed by one chip.
+                return serials[0]
+            # If a serial number isn't exposed on a matching device, we try
+            # other specs just in case by iterating further.
+        # Tried all the specs - but haven't found a serial number.
+        return None
+
+    def _ovs_dpdk_cpu_overlap_check(self):
+        """Check for overlap between dpdk-lcore-mask and pmd-cpu-mask."""
+        dpdk_context = os_context.OVSDPDKDeviceContext(
+            bridges_key=self.charm_instance.bridges_key)
+        if not (int(dpdk_context.pmd_cpu_mask(), 16) &
+                int(dpdk_context.cpu_mask(), 16)):
+            return
+
+        ch_core.hookenv.log('Overlap detected between dpdk-lcore-mask '
+                            'and pmd-cpu-mask.',
+                            level=ch_core.hookenv.WARNING)
+        self._validation_errors['pmd-cpu-mask'] = (
+            'Fix overlap between dpdk-lcore-mask and pmd-cpu-mask.')
+
 
 class NeutronPluginRelationAdapter(
         charms_openstack.adapters.OpenStackRelationAdapter):
@@ -265,7 +377,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     python_version = 3
     enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
-    valid_config = True
     # Extra packages and services to be installed, managed and monitored if
     # charm forms part of an Openstack Deployment
     openstack_packages = ['neutron-ovn-metadata-agent']
@@ -546,26 +657,21 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         )
 
     def custom_assess_status_last_check(self):
-        """Override parent method to check bridge config and dpdk mask overlap.
+        """Check if config validation errors are present and block if they are.
 
-        Check if has valid bridge config and set to blocked if is invalid.
-
-        Check if dpdk-lcore-mask and pmd-cpu-mask overlap in case OVS DPDK is
-        used and set to blocked if overlap detected.
-
-        Returns (None, None) if the interfaces are okay, or a status, message
-        if the config is invalid.
+        Returns (None, None) if the config is ok, or a status, message if the
+        config is invalid.
 
         :returns status & message info
         :rtype: (status, message) or (None, None)
         """
 
-        if not self.valid_config:
-            message = ('Wrong format for bridge-interface-mappings. '
-                       'Expected format is space-delimited list of '
-                       'key-value pairs. Ex: "br-internet:00:00:5e:00:00:42 '
-                       'br-provider:enp3s0f0"')
-            return 'blocked', message
+        if self.options.validation_errors:
+            status_msg = ', '.join([
+                f'{k}: "{msg}"' for k, msg
+                in self.options.validation_errors.items()
+            ])
+            return 'blocked', status_msg
 
         if self.options.enable_dpdk and self.ovs_dpdk_cpu_overlap_check():
             ch_core.hookenv.log('Overlap detected between dpdk-lcore-mask '
@@ -796,20 +902,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                         pass
         return something_changed
 
-    def ovs_dpdk_cpu_overlap_check(self):
-        """Check for overlap between dpdk-lcore-mask and pmd-cpu-mask.
-
-        :returns: True if an overlap is detected
-        :rtype: bool
-        """
-        overlap_detected = False
-        dpdk_context = os_context.OVSDPDKDeviceContext(
-            bridges_key=self.bridges_key)
-        if (int(dpdk_context.pmd_cpu_mask(), 16) &
-                int(dpdk_context.cpu_mask(), 16)):
-            overlap_detected = True
-        return overlap_detected
-
     def configure_ovs_hw_offload(self):
         """Configure hardware offload specific bits in Open vSwitch.
 
@@ -919,18 +1011,12 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 'port interface configuration tasks.',
                                 level=ch_core.hookenv.INFO)
             return
-        try:
-            bpi = os_context.BridgePortInterfaceMap(
-                bridges_key=self.bridges_key
-            )
-            self.valid_config = True
-
-        except ValueError:
-            self.valid_config = False
+        bim = self.options.bridge_interface_map
+        if not bim:
             return
 
         bond_config = os_context.BondConfig()
-        ch_core.hookenv.log('BridgePortInterfaceMap: "{}"'.format(bpi.items()),
+        ch_core.hookenv.log('BridgePortInterfaceMap: "{}"'.format(bim.items()),
                             level=ch_core.hookenv.DEBUG)
 
         # build map of bridges to ovn networks with existing if-mapping on host
@@ -940,7 +1026,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         config_obm = self.config['ovn-bridge-mappings'] or ''
         for pair in sorted(config_obm.split()):
             network, bridge = pair.split(':', 1)
-            if bridge in bpi:
+            if bridge in bim:
                 ovnbridges[bridge].append(network)
                 if ovn_br_map_str:
                     ovn_br_map_str += ','
@@ -951,7 +1037,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         for bridge in bridges.find('external_ids:charm-ovn-chassis=managed'):
             # remove bridges and ports that are managed by us and no longer in
             # config
-            if bridge['name'] not in bpi and bridge['name'] != 'br-int':
+            if bridge['name'] not in bim and bridge['name'] != 'br-int':
                 ch_core.hookenv.log('removing bridge "{}" as it is no longer'
                                     'present in configuration for this unit.'
                                     .format(bridge['name']),
@@ -960,7 +1046,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             else:
                 for port in ports.find('external_ids:charm-ovn-chassis={}'
                                        .format(bridge['name'])):
-                    if port['name'] not in bpi[bridge['name']]:
+                    if port['name'] not in bim[bridge['name']]:
                         ch_core.hookenv.log('removing port "{}" from bridge '
                                             '"{}" as it is no longer present '
                                             'in configuration for this unit.'
@@ -994,7 +1080,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 'other-config': {'disable-in-band': 'true'},
             },
         })
-        for br in bpi:
+        for br in bim:
             if br not in ovnbridges:
                 continue
             ch_ovs.add_bridge(br, brdata={
@@ -1003,8 +1089,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 # datapath to act like an ordinary MAC-learning switch.
                 **{'fail-mode': 'standalone'},
             })
-            for port in bpi[br]:
-                ifdatamap = bpi.get_ifdatamap(br, port)
+            for port in bim[br]:
+                ifdatamap = bim.get_ifdatamap(br, port)
                 ifdatamap = {
                     port: {
                         **ifdata,
@@ -1032,12 +1118,21 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         else:
             opvs.remove('.', 'external_ids', 'ovn-bridge-mappings')
 
-        if self.options.prefer_chassis_as_gw:
-            opvs.set(
-                '.', 'external_ids:ovn-cms-options', 'enable-chassis-as-gw')
+        cms_opts = self._get_ovn_cms_options()
+        if cms_opts:
+            opvs.set('.', 'external_ids:ovn-cms-options', ','.join(cms_opts))
         else:
-            opvs.remove(
-                '.', 'external_ids', 'ovn-cms-options=enable-chassis-as-gw')
+            opvs.remove('.', 'external_ids', 'ovn-cms-options')
+
+    def _get_ovn_cms_options(self):
+        """Get options to be passed into ovn-cms-options"""
+        cms_opts = []
+        if self.options.prefer_chassis_as_gw:
+            cms_opts.append('enable-chassis-as-gw')
+        if self.options.card_serial_number:
+            cms_opts.append(
+                f'card-serial-number={self.options.card_serial_number}')
+        return cms_opts
 
     def render_nrpe(self):
         """Configure Nagios NRPE checks."""
