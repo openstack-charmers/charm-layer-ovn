@@ -38,6 +38,37 @@ _DEFERABLE_SVC_LIST = ['openvswitch-switch', 'ovn-controller', 'ovn-host',
                        'ovs-vswitchd', 'ovsdb-server', 'ovs-record-hostname']
 
 
+def is_deferred_event_permitted(config_rendered, enable_auto_restarts_changed,
+                                check_deferred_events, is_restart_permitted):
+    """Check whether a deferred event can run or not.
+
+    :param config_rendered: true if config.rendered flag is set. When this
+                            flag is not set, deferred events are permitted
+                            to allow completing first installation.
+    :type config_rendered: bool
+    :param enable_auto_restarts_changed: true if enable_auto_restarts
+                                         changed since last iteration.
+                                         If enable-auto-restarts has
+                                         changed, deferred events will be
+                                         permitted irrespective of what it
+                                         was changed to. This ensures that
+                                         this method is not immediately
+                                         deferred when enable-auto-restarts
+                                         is initially set to False.
+    :type enable_auto_restarts_changed: bool
+    :param check_deferred_events: Whether to check if restarts are
+                                  permitted before running hook.
+    :type check_deferred_events: bool
+    :param is_restart_permitted: if true deferred events can run.
+    :type is_restart_permitted: bool
+    """
+
+    if ((not config_rendered) or (not check_deferred_events) or
+            enable_auto_restarts_changed or is_restart_permitted):
+        return True
+    return False
+
+
 class DeferredEventMixin():
     """Mixin to add to charm class to add support for deferred events."""
 
@@ -135,13 +166,14 @@ class DeferredEventMixin():
                                       permitted before running hook.
         :type check_deferred_events: bool
         """
+        config_rendered = reactive.flags.is_flag_set('config.rendered')
         changed = reactive.flags.is_flag_set(
-            'config.changed.enable-auto-restarts')
-        # Run method if enable-auto-restarts has changed, irrespective of what
-        # it was changed to. This ensure that this method is not immediately
-        # deferred when enable-auto-restarts is initially set to False.
-        if ((not check_deferred_events) or changed or
-                deferred_events.is_restart_permitted()):
+            'config.changed.enable-auto-restarts'
+        )
+        is_restart_permitted = deferred_events.is_restart_permitted()
+        if is_deferred_event_permitted(config_rendered, changed,
+                                       check_deferred_events,
+                                       is_restart_permitted):
             deferred_events.clear_deferred_hook('configure_ovs')
             super().configure_ovs(sb_conn, mlockall_changed)
         else:
@@ -154,13 +186,14 @@ class DeferredEventMixin():
                                       permitted before running hook.
         :type check_deferred_events: bool
         """
+        config_rendered = reactive.flags.is_flag_set('config.rendered')
         changed = reactive.flags.is_flag_set(
-            'config.changed.enable-auto-restarts')
-        # Run method if enable-auto-restarts has changed, irrespective of what
-        # it was changed to. This ensure that this method is not immediately
-        # deferred when enable-auto-restarts is initially set to False.
-        if ((not check_deferred_events) or changed or
-                deferred_events.is_restart_permitted()):
+            'config.changed.enable-auto-restarts'
+        )
+        is_restart_permitted = deferred_events.is_restart_permitted()
+        if is_deferred_event_permitted(config_rendered, changed,
+                                       check_deferred_events,
+                                       is_restart_permitted):
             deferred_events.clear_deferred_hook('install')
             super().install()
         else:

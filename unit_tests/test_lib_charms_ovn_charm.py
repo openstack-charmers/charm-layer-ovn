@@ -22,6 +22,7 @@ import charms_openstack.charm.core as chm_core
 import charms_openstack.test_utils as test_utils
 
 import charms.ovn_charm as ovn_charm
+from charms.ovn_charm import is_deferred_event_permitted
 
 
 class TestDeferredEventMixin(test_utils.PatchHelper):
@@ -143,98 +144,79 @@ class TestDeferredEventMixin(test_utils.PatchHelper):
             (None, None))
 
     def test_configure_ovs(self):
-        self.patch_object(ovn_charm.deferred_events, 'is_restart_permitted')
+        self.patch_object(ovn_charm, 'is_deferred_event_permitted')
         self.patch_object(ovn_charm.deferred_events, 'clear_deferred_hook')
-        self.patch_object(ovn_charm.deferred_events, 'set_deferred_hook')
-        self.patch_object(ovn_charm.reactive.flags, 'is_flag_set')
 
-        # Tests with restarts permitted
+        # Test deferred events are permitted
+        self.is_deferred_event_permitted.return_value = True
         self.clear_deferred_hook.reset_mock()
-        self.is_flag_set.return_value = False
-        self.is_restart_permitted.return_value = True
         self.charm_instance.configure_ovs(
             's_conn',
             'mlockall_changed',
             check_deferred_events=True)
         self.clear_deferred_hook.assert_called_once_with('configure_ovs')
 
+        # Test deferred events are not permitted
+        self.is_deferred_event_permitted.return_value = False
         self.clear_deferred_hook.reset_mock()
-        self.charm_instance.configure_ovs(
-            's_conn',
-            'mlockall_changed',
-            check_deferred_events=False)
-        self.clear_deferred_hook.assert_called_once_with('configure_ovs')
-
-        # Tests with restarts not permitted
-        self.clear_deferred_hook.reset_mock()
-        self.is_restart_permitted.return_value = False
         self.charm_instance.configure_ovs(
             's_conn',
             'mlockall_changed',
             check_deferred_events=True)
         self.assertFalse(self.clear_deferred_hook.called)
-
-        self.clear_deferred_hook.reset_mock()
-        self.charm_instance.configure_ovs(
-            's_conn',
-            'mlockall_changed',
-            check_deferred_events=False)
-        self.clear_deferred_hook.assert_called_once_with('configure_ovs')
-
-        # Tests with restarts not permitted from this hooks onwards.
-        self.clear_deferred_hook.reset_mock()
-        self.is_restart_permitted.return_value = False
-        self.is_flag_set.return_value = True
-        self.charm_instance.configure_ovs(
-            's_conn',
-            'mlockall_changed',
-            check_deferred_events=True)
-        self.clear_deferred_hook.assert_called_once_with('configure_ovs')
-
-        self.clear_deferred_hook.reset_mock()
-        self.charm_instance.configure_ovs(
-            's_conn',
-            'mlockall_changed',
-            check_deferred_events=False)
-        self.clear_deferred_hook.assert_called_once_with('configure_ovs')
 
     def test_install(self):
-        self.patch_object(ovn_charm.deferred_events, 'is_restart_permitted')
+        self.patch_object(ovn_charm, 'is_deferred_event_permitted')
         self.patch_object(ovn_charm.deferred_events, 'clear_deferred_hook')
-        self.patch_object(ovn_charm.deferred_events, 'set_deferred_hook')
-        self.patch_object(ovn_charm.reactive.flags, 'is_flag_set')
 
-        # Tests with restarts permitted
+        # Test deferred events are permitted
+        self.is_deferred_event_permitted.return_value = True
         self.clear_deferred_hook.reset_mock()
-        self.is_flag_set.return_value = False
-        self.is_restart_permitted.return_value = True
         self.charm_instance.install(check_deferred_events=True)
         self.clear_deferred_hook.assert_called_once_with('install')
 
+        # Test deferred events are not permitted
+        self.is_deferred_event_permitted.return_value = False
         self.clear_deferred_hook.reset_mock()
-        self.charm_instance.install(check_deferred_events=False)
-        self.clear_deferred_hook.assert_called_once_with('install')
-
-        # Tests with restarts not permitted
-        self.clear_deferred_hook.reset_mock()
-        self.is_restart_permitted.return_value = False
         self.charm_instance.install(check_deferred_events=True)
         self.assertFalse(self.clear_deferred_hook.called)
 
-        self.clear_deferred_hook.reset_mock()
-        self.charm_instance.install(check_deferred_events=False)
-        self.clear_deferred_hook.assert_called_once_with('install')
+    def test_deferred_event_is_not_permitted(self):
+        # Only case when deferred event is not permitted
+        config_rendered = True
+        enable_auto_restarts_changed = False
+        check_deferred_events = True
+        is_restart_permitted = False
 
-        # Tests with restarts not permitted from this hooks onwards.
-        self.clear_deferred_hook.reset_mock()
-        self.is_restart_permitted.return_value = False
-        self.is_flag_set.return_value = True
-        self.charm_instance.install(check_deferred_events=True)
-        self.clear_deferred_hook.assert_called_once_with('install')
+        self.assertFalse(is_deferred_event_permitted(
+            config_rendered, enable_auto_restarts_changed,
+            check_deferred_events, is_restart_permitted))
 
-        self.clear_deferred_hook.reset_mock()
-        self.charm_instance.install(check_deferred_events=False)
-        self.clear_deferred_hook.assert_called_once_with('install')
+    def test_deferred_event_is_permitted(self):
+        # All cases when deferred event is permitted
+        test_cases = [
+            [True, True, True, True],
+            [True, False, True, True],
+            [True, True, False, True],
+            [True, True, True, False],
+            [True, False, False, True],
+            [True, True, False, False],
+            [True, False, False, False],
+
+            [False, False, False, False],
+            [False, True, False, False],
+            [False, False, True, False],
+            [False, False, False, True],
+            [False, True, True, False],
+            [False, True, False, True],
+            [False, False, True, True],
+            [False, True, True, True],
+        ]
+
+        for test_case in test_cases:
+            self.assertTrue(is_deferred_event_permitted(
+                test_case[0], test_case[1], test_case[2], test_case[3]
+            ))
 
 
 class TestOVNConfigurationAdapter(test_utils.PatchHelper):
