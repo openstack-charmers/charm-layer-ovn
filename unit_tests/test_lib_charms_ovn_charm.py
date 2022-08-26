@@ -351,8 +351,8 @@ class Helper(test_utils.PatchHelper):
         # remove the 'is_flag_set' patch so the tests can use it
         self._patches['is_flag_set'].stop()
         setattr(self, 'is_flag_set', None)
-        del(self._patches['is_flag_set'])
-        del(self._patches_start['is_flag_set'])
+        del self._patches['is_flag_set']
+        del self._patches_start['is_flag_set']
 
         self.patch('charmhelpers.contrib.openstack.context.DPDKDeviceContext',
                    name='DPDKDeviceContext')
