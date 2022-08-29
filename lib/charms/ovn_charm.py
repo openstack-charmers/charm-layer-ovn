@@ -378,6 +378,23 @@ class OVNConfigurationAdapter(
         self._validation_errors['pmd-cpu-mask'] = (
             'Fix overlap between dpdk-lcore-mask and pmd-cpu-mask.')
 
+    @property
+    def ovs_exporter_snap_channel(self):
+        """Validate a provided snap channel and return it
+
+        Any prefix is ignored ('0.10' in '0.10/stable' for example). If
+        a config value is empty it means that the snap does not need to
+        be installed.
+        """
+        channel = self.ovs_exporter_channel
+        if not channel:
+            return None
+
+        channel_suffix = channel.split('/')[-1]
+        if channel_suffix not in ('stable', 'candidate', 'beta', 'edge'):
+            return 'stable'
+        return channel_suffix
+
 
 class NeutronPluginRelationAdapter(
         charms_openstack.adapters.OpenStackRelationAdapter):

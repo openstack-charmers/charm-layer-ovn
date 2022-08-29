@@ -3,6 +3,7 @@ includes:
   - interface:ovsdb
   - interface:rabbitmq
   - interface:nrpe-external-master
+  - layer:snap
 exclude: 
   - .gitignore
   - .stestr.conf

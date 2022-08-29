@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import contextlib
-import os
 
 import charmhelpers.core as ch_core
 
@@ -21,6 +20,7 @@ import charms.reactive as reactive
 import charms_openstack.bus
 import charms_openstack.charm as charm
 
+from charms.layer import snap
 
 charms_openstack.bus.discover()
 OVN_CHASSIS_ENABLE_HANDLERS_FLAG = 'charm.ovn.chassis.enable-handlers'
@@ -138,3 +138,25 @@ def provide_chassis_certificates_to_principal():
                             level=ch_core.hookenv.WARNING)
 
     reactive.clear_flag('ovn.certs.changed')
+
+
+@reactive.when_any('config.changed.ovs-exporter-channel',
+                   'snap.installed.prometheus-ovs-exporter')
+def reassess_exporter():
+    is_installed = snap.is_installed('prometheus-ovs-exporter')
+    channel = None
+    with charm.provide_charm_instance() as instance:
+        channel = instance.options.ovs_exporter_snap_channel
+
+    if channel is None:
+        # Attempt to remove the snap if it is present, the snap command
+        # returns 0 if the snap is not installed.
+        snap.remove('prometheus-ovs-exporter')
+        return
+
+    if is_installed:
+        snap.refresh('prometheus-ovs-exporter', channel=channel,
+                devmode=True)
+    else:
+        snap.install('prometheus-ovs-exporter', channel=channel,
+                devmode=True)

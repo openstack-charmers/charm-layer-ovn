@@ -59,6 +59,11 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'ovsdb-subordinate.available',
                     'ovn.certs.changed'),
             },
+            'when_not': {
+                'snap_install': (
+                    'snap.installed.prometheus-ovs-exporter',
+                )
+            },
             'when_none': {
                 'amqp_connection': ('charm.paused', 'is-update-status-hook'),
                 'disable_openstack': (
@@ -85,6 +90,9 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'config.changed.nagios_servicegroups',
                     'endpoint.nrpe-external-master.changed',
                     'nrpe-external-master.available'),
+                'reassess_exporter': (
+                    'config.changed.ovs-exporter-channel',
+                    'snap.installed.prometheus-ovs-exporter'),
             },
         }
         # test that the hooks were registered via the
