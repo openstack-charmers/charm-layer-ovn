@@ -93,6 +93,7 @@ def configure_ovs():
             reactive.is_flag_set('config.changed.disable-mlockall'))
         reactive.set_flag('config.rendered')
         charm_instance.configure_bridges()
+        charm_instance.configure_iptables_rules()
         charm_instance.assess_status()
 
 

@@ -16,6 +16,7 @@ import collections
 import copy
 import io
 import textwrap
+import subprocess
 import unittest.mock as mock
 
 import charms_openstack.charm.core as chm_core
@@ -1459,6 +1460,50 @@ class TestOVNChassisCharm(Helper):
         opvs.open_vswitch.__iter__.return_value = [{
             'other_config': {'some-other-key-we-dont-care-about': 42}}]
         self.assertFalse(self.target.configure_ovs_dpdk())
+
+    def test_configure_iptables_rules_not_exist(self):
+        # Confirm that iptables rules are being added when it is absent
+        # in the environment
+        self.patch('charms.ovn_charm.BaseOVNChassisCharm.run',
+                   name="run")
+
+        def dummy_run(*args):
+            if args[3] == '-C':
+                raise subprocess.CalledProcessError(1, "dummy")
+            return subprocess.CompletedProcess("dummy-args", 0)
+
+        self.run.side_effect = dummy_run
+        self.target.configure_iptables_rules()
+        self.run.assert_has_calls([
+            mock.call('iptables', '-t', 'raw', '-C', "PREROUTING",
+                      '-p', 'udp', '--dport', '6081', '-j', 'NOTRACK'),
+            mock.call('iptables', '-t', 'raw', '-A', "PREROUTING",
+                      '-p', 'udp', '--dport', '6081', '-j', 'NOTRACK'),
+            mock.call('iptables', '-t', 'raw', '-C', "OUTPUT", '-p',
+                      'udp', '--dport', '6081', '-j', 'NOTRACK'),
+            mock.call('iptables', '-t', 'raw', '-A', "OUTPUT", '-p',
+                      'udp', '--dport', '6081', '-j', 'NOTRACK'),
+        ], any_order=False)
+        assert 4 == self.run.call_count
+
+    def test_configure_iptables_rules_already_exist(self):
+        # Confirm that iptables rules are not being added when rules
+        # already present in the environment
+        self.patch('charms.ovn_charm.BaseOVNChassisCharm.run',
+                   name="run")
+
+        def dummy_run(*args):
+            return subprocess.CompletedProcess("dummy-args", 0)
+
+        self.run.side_effect = dummy_run
+        self.target.configure_iptables_rules()
+        self.run.assert_has_calls([
+            mock.call('iptables', '-t', 'raw', '-C', "PREROUTING",
+                      '-p', 'udp', '--dport', '6081', '-j', 'NOTRACK'),
+            mock.call('iptables', '-t', 'raw', '-C', "OUTPUT", '-p',
+                      'udp', '--dport', '6081', '-j', 'NOTRACK'),
+        ])
+        assert 2 == self.run.call_count
 
 
 class TestSRIOVOVNChassisCharm(Helper):
