@@ -152,6 +152,7 @@ class TestOvnHandlers(test_utils.PatchHelper):
                                      'amqp.connected'))
         self.set_flag.assert_called_once_with('config.rendered')
         self.charm.configure_bridges.assert_called_once_with()
+        self.charm.configure_iptables_rules.assert_called_once_with()
         self.charm.assess_status.assert_called_once_with()
 
     def test_configure_nrpe(self):

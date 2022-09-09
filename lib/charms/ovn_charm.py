@@ -1183,3 +1183,54 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         nrpe.add_init_service_checks(
             charm_nrpe, self.nrpe_check_services, current_unit)
         charm_nrpe.write()
+
+    def configure_iptables_rules(self):
+        """
+        Configure `iptables` NOTRACK rules for GENEVE traffic in nf_conntrack
+
+        The GENEVE/VXLAN traffic has randomized source ports[1], which
+        plays badly with nf_conntrack in a busy cloud environment. Having
+        randomized source ports change the five-tuple info, resulting to an
+        increase in unique connections that nf_conntrack tracks. That
+        inevitably leads to a full nf_conntrack table and connections to be
+        dropped.
+
+        NOTRACK rules allow nf_conntrack to ignore the said traffic. UDP
+        flows with destination port 6081 will not be tracked by nf_conntrack
+        while rules are in effect.
+
+        [1]:(https://datatracker.ietf.org/doc/html/rfc8926#section-3.3)
+        """
+        ch_core.hookenv.log("Configuring iptables rules",
+                            level=ch_core.hookenv.INFO)
+
+        def append_notrack_rule(chain_name):
+            """
+            Append a iptables NOTRACK rule to a chain in raw table.
+
+            :param str chain_name: Chain to append
+            """
+            args = ['iptables', '-t', 'raw', '-C', chain_name, '-p', 'udp',
+                    '--dport', '6081', '-j', 'NOTRACK']
+            try:
+                self.run(*args)
+                ch_core.hookenv.log(
+                    "Rule `{}` append to `{}` chain skipped (already exists)"
+                    .format(' '.join(args), chain_name),
+                    level=ch_core.hookenv.INFO)
+            except subprocess.CalledProcessError as cpe:
+                if cpe.returncode != 1:
+                    raise
+
+                # Append command is exactly the same with check
+                # except the check (-C) is replaced with append
+                # (-A)
+                args[3] = '-A'
+                self.run(*args)
+                ch_core.hookenv.log(
+                    "Rule `{}` appended to `{}` chain"
+                    .format(' '.join(args), chain_name),
+                    level=ch_core.hookenv.INFO)
+
+        append_notrack_rule('PREROUTING')
+        append_notrack_rule('OUTPUT')
