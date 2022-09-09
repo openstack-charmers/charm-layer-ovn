@@ -885,6 +885,8 @@ class TestDPDKOVNChassisCharm(Helper):
         opvs = mock.MagicMock()
         self.SimpleOVSDB.return_value = opvs
 
+        self._ovs_dpdk_cpu_overlap_check.return_value = False
+
         # No existing config, confirm restart and values set as expected
         opvs.open_vswitch.__iter__.return_value = [
             {'other_config': {}}]
@@ -941,6 +943,9 @@ class TestDPDKOVNChassisCharm(Helper):
         self.assertTrue(self.target.configure_ovs_dpdk())
         opvs.open_vswitch.remove.assert_called_once_with(
             '.', 'other_config', 'pmd-cpu-mask')
+
+        self.assertEqual(self.target.custom_assess_status_last_check(),
+                         (None, None))
 
     def test_purge_packages(self):
         self.assertEquals(

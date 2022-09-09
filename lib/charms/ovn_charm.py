@@ -706,7 +706,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             ])
             return 'blocked', status_msg
 
-        if self.options.enable_dpdk and self._ovs_dpdk_cpu_overlap_check():
+        if (self.options.enable_dpdk and
+                self.options._ovs_dpdk_cpu_overlap_check()):
             ch_core.hookenv.log('Overlap detected between dpdk-lcore-mask '
                                 'and pmd-cpu-mask.',
                                 level=ch_core.hookenv.WARNING)
