@@ -1038,6 +1038,63 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         if restart_required:
             ch_core.host.service_restart('openvswitch-switch')
 
+    def _get_port_type(self, port):
+        """Determine port type from its interface records.
+
+        :param port: Port record
+        :type port: Dict[str,any]
+        :returns: Port type as identified by its interface records.
+        :rtype: str
+        :raises: RuntimeError if interfaces are of different type.
+        """
+        if_records = port['interfaces']
+        # SimpleOVSDB does not know the schema and does not represent list type
+        # columns as lists when there is a single value.
+        if not isinstance(if_records, list):
+            if_records = [if_records]
+        interfaces = ch_ovsdb.SimpleOVSDB('ovs-vsctl').interface
+        if_types = [interfaces[if_record]['type']
+                    for if_record in if_records]
+        if not all(if_type == if_types[0] for if_type in if_types):
+            raise RuntimeError('Port {} has interfaces of different types '
+                               '({}), unable to determine port type.'
+                               .format(port['_uuid'], if_types))
+        return if_types[0]
+
+    def _should_linkdown(self, port):
+        """Determine whether we should request linkdown on port delete.
+
+        :param port: Port record
+        :type port: Dict[str,any]
+        :returns: True or False
+        :rtype: bool
+        """
+        # When a system is transitioning from kernel interfaces to DPDK, the
+        # following will happen:
+        # 1) System is configured to associate interfaces with the DPDK driver.
+        # 2) The `dpdk` systemd service will be restarted which unbinds
+        #    interfaces from the kernel driver.
+        # 3) configure_bridges is called which will remove the interfaces that
+        #    used to be associated with the kernel driver.
+        #
+        # At this point in time the interface name referred to in the Open
+        # vSwitch configuration no longer exist in the system and as such
+        # we should not attempt to modify the link state with `ip link`.
+        #
+        #
+        # Moving in the other direction from DPDK to kernel drivers:
+        # 1) System is configured to no longer associate interfaces with the
+        #    DPDK driver.
+        # 2) The functional test will reboot the test instance.
+        # 3) configure_bridges is called which will remove the interfaces that
+        #    used to be associated with the DPDK driver.
+        #
+        # The dpdk interface does not exist in the system and the charm
+        # configuration says that DPDK is disabled.
+        if self.options.enable_dpdk or self._get_port_type(port) == 'dpdk':
+            return False
+        return True
+
     def configure_bridges(self):
         """Configure Open vSwitch bridges ports and interfaces."""
         if self.check_if_paused() != (None, None):
@@ -1090,7 +1147,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                         ch_ovs.del_bridge_port(
                             bridge['name'],
                             port['name'],
-                            linkdown=not self.options.enable_dpdk)
+                            linkdown=self._should_linkdown(port))
         brdata = {
             'external-ids': {'charm-ovn-chassis': 'managed'},
             'protocols': 'OpenFlow13,OpenFlow15',
