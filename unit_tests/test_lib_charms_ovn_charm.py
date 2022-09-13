@@ -18,6 +18,7 @@ import io
 import textwrap
 import subprocess
 import unittest.mock as mock
+import uuid
 
 import charms_openstack.charm.core as chm_core
 import charms_openstack.test_utils as test_utils
@@ -407,6 +408,8 @@ class TestOVNConfigurationAdapterDPDKOverlap(test_utils.PatchHelper):
         self.config.side_effect = _config_side_effect
 
     def test_ovs_dpdk_cpu_overlap_check(self):
+        self.patch_object(ovn_charm.os_context, 'DPDKDeviceContext')
+        self.DPDKDeviceContext().return_value = {}
         dpdk_context = mock.MagicMock()
         self.patch_object(ovn_charm.os_context, 'OVSDPDKDeviceContext',
                           return_value=dpdk_context)
@@ -792,6 +795,8 @@ class TestDPDKOVNChassisCharm(Helper):
         self.patch_object(ovn_charm.ch_ovs, 'add_bridge_port')
         self.patch_target('check_if_paused')
         self.check_if_paused.return_value = ('some', 'reason')
+        self.patch_target('_get_port_type')
+        self._get_port_type.return_value = 'dpdk'
         self.target.configure_bridges()
         self.BridgePortInterfaceMap.assert_not_called()
         self.check_if_paused.return_value = (None, None)
@@ -980,6 +985,16 @@ class TestDPDKOVNChassisCharm(Helper):
                       '/usr/lib/openvswitch-switch-dpdk/ovs-vswitchd-dpdk'),
             mock.call('systemd-tmpfiles', '--create'),
         ])
+
+    def test__should_linkdown(self):
+        # enable-dpdk = True
+        self.patch_target('_get_port_type')
+        # Normal port with interfaces that should be bound to kernel driver
+        self._get_port_type.return_value = ''
+        self.assertFalse(self.target._should_linkdown('fake-port'))
+        # DPDK port with interfaces that should not be bound to kernel driver
+        self._get_port_type.return_value = 'dpdk'
+        self.assertFalse(self.target._should_linkdown('fake-port'))
 
 
 class TestOVNChassisCharm(Helper):
@@ -1237,6 +1252,8 @@ class TestOVNChassisCharm(Helper):
         self.patch_object(ovn_charm.ch_ovs, 'add_bridge_port')
         self.patch_target('check_if_paused')
         self.check_if_paused.return_value = ('some', 'reason')
+        self.patch_target('_get_port_type')
+        self._get_port_type.return_value = ''
         self.target.configure_bridges()
         self.BridgePortInterfaceMap.assert_not_called()
         self.check_if_paused.return_value = (None, None)
@@ -1509,6 +1526,55 @@ class TestOVNChassisCharm(Helper):
                       'udp', '--dport', '6081', '-j', 'NOTRACK'),
         ])
         assert 2 == self.run.call_count
+
+    def test__get_port_type(self):
+        self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
+        ovsdb = mock.MagicMock()
+        ovsdb.interface.__getitem__.return_value = {
+            'type': '',
+        }
+        self.SimpleOVSDB.return_value = ovsdb
+        # Confirm that retrieving type for port with single interface works
+        record = uuid.uuid4()
+        self.assertEqual(
+            '',
+            self.target._get_port_type({'interfaces': record}))
+        ovsdb.interface.__getitem__.assert_called_once_with(record)
+        ovsdb.reset_mock()
+
+        # Confirm that retrieving type for port with multiple interfaces works
+        record1 = uuid.uuid4()
+        record2 = uuid.uuid4()
+        self.assertEqual(
+            '',
+            self.target._get_port_type({'interfaces': [record1, record2]}))
+        ovsdb.interface.__getitem__.assert_has_calls([
+            mock.call(record1),
+            mock.call(record2),
+        ])
+        self.assertEqual(
+            2,
+            ovsdb.interface.__getitem__.call_count)
+
+        # Confirm that port with interfaces of different type raises an error
+        ovsdb.interface.__getitem__.return_value = None
+        ovsdb.interface.__getitem__.side_effect = [
+            {'type': ''},
+            {'type': 'dpdk'},
+        ]
+        with self.assertRaises(RuntimeError):
+            self.target._get_port_type(
+                {'_uuid': 'fake-uuid', 'interfaces': [record1, record2]})
+
+    def test__should_linkdown(self):
+        # enable-dpdk = False
+        self.patch_target('_get_port_type')
+        # Normal port with interfaces that should be bound to kernel driver
+        self._get_port_type.return_value = ''
+        self.assertTrue(self.target._should_linkdown('fake-port'))
+        # DPDK port with interfaces that should not be bound to kernel driver
+        self._get_port_type.return_value = 'dpdk'
+        self.assertFalse(self.target._should_linkdown('fake-port'))
 
 
 class TestSRIOVOVNChassisCharm(Helper):
