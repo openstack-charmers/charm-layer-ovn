@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import contextlib
-import os
 
 import charmhelpers.core as ch_core
 
@@ -22,6 +21,7 @@ import charms.reactive as reactive
 import charms_openstack.bus
 import charms_openstack.charm as charm
 
+from charms.layer import snap
 
 charms_openstack.bus.discover()
 OVN_CHASSIS_ENABLE_HANDLERS_FLAG = 'charm.ovn.chassis.enable-handlers'
@@ -181,3 +181,54 @@ def provide_chassis_certificates_to_principal():
                             level=ch_core.hookenv.WARNING)
 
     reactive.clear_flag('ovn.certs.changed')
+
+
+@reactive.when_any('config.changed.ovs-exporter-channel',
+                   'snap.installed.prometheus-ovs-exporter')
+def reassess_exporter():
+    is_installed = snap.is_installed('prometheus-ovs-exporter')
+    channel = None
+    with charm.provide_charm_instance() as instance:
+        channel = instance.options.ovs_exporter_snap_channel
+
+    if channel is None:
+        # Attempt to remove the snap if it is present, the snap command
+        # returns 0 if the snap is not installed.
+        snap.remove('prometheus-ovs-exporter')
+        return
+
+    if is_installed:
+        snap.refresh('prometheus-ovs-exporter', channel=channel,
+                     devmode=True)
+    else:
+        snap.install('prometheus-ovs-exporter', channel=channel,
+                     devmode=True)
+
+
+@reactive.when('metrics-endpoint.available',
+               'snap.installed.prometheus-ovs-exporter')
+def handle_metrics_endpoint():
+    metrics_endpoint = reactive.endpoint_from_flag(
+        'metrics-endpoint.available')
+    job_name = 'ovs-exporter'
+    metrics_endpoint.expose_job(
+        job_name,
+        static_configs=[{"targets": ["*:9475"]}])
+
+
+@reactive.when('metrics-endpoint.available')
+@reactive.when_not('snap.installed.prometheus-ovs-exporter')
+def maybe_clear_metrics_endpoint():
+    """Clear the metrics endpoint state if the exporter isn't installed.
+
+    An operator may choose not to install the ovs exporter which needs
+    to be reflected if a relation to prometheus is present to avoid
+    scrape errors.
+    """
+    metrics_endpoint = reactive.endpoint_from_flag(
+        'metrics-endpoint.available')
+    job_name = 'ovs-exporter'
+    if not reactive.is_flag_set(f'metrics-endpoint.exposed.{job_name}'):
+        return
+
+    metrics_endpoint.clear_job(job_name)

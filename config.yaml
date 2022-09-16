@@ -352,4 +352,10 @@ options:
       should not normally happen with DPUs that only have one chip exposed.
       .
       Examples: [{"bus": "pci", "vendor_id": "15b3", "product_id": "a2d6" },
-
+  ovs-exporter-channel:
+    type: string
+    default: stable
+    description: >-
+      The snap channel to install the prometheus-ovs-exporter from. Setting
+      this option to an empty string will result in the snap not being
+      installed or removed if it has already been installed.
