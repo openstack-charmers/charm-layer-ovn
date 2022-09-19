@@ -1336,6 +1336,23 @@ class TestOVNChassisCharm(Helper):
             self.target.custom_assess_status_last_check(),
             ('blocked', f'{self.target.bridges_key}: {expected_msg}'))
 
+    def test_empty_configure_bridges(self):
+        self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
+        self.BridgePortInterfaceMap.return_value = {}
+
+        self.patch_target('check_if_paused')
+        self.check_if_paused.return_value = (None, None)
+        self.assertEqual(self.target.custom_assess_status_last_check(),
+                         (None, None))
+        self.target.configure_bridges()
+        self.BridgePortInterfaceMap.assert_called_once_with(
+            bridges_key='bridge-interface-mappings')
+
+        self.assertEqual(
+            self.target.custom_assess_status_last_check(),
+            (None, None)
+        )
+
     def test_wrong_vpd_spec(self):
         self.target.options.vpd_device_spec = '{'
         self.patch_target('check_if_paused')
