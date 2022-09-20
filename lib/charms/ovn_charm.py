@@ -1102,8 +1102,12 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                 'port interface configuration tasks.',
                                 level=ch_core.hookenv.INFO)
             return
+
         bim = self.options.bridge_interface_map
-        if not bim:
+        # A bridge interface mapping may be empty if an empty string is
+        # specified, however, this is different from an invalid mapping in
+        # which case the property returns None and we should not proceed.
+        if bim is None:
             return
 
         bond_config = os_context.BondConfig()
