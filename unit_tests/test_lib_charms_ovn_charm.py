@@ -284,6 +284,42 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
     def test_mlockall_disabled_none_false(self):
         self._test_mlock_d(config_rv=None, container_rv=False, mlock_rv=False)
 
+    def test__ovn_source(self):
+        self.patch_object(ovn_charm.reactive, 'is_flag_set',
+                          return_value=True)
+        self.patch_object(ovn_charm.ch_core.host, 'lsb_release',
+                          return_value={'DISTRIB_CODENAME': 'focal'})
+        # User has supplied a ovn-source config
+        m = mock.patch.object(ovn_charm.ch_core.hookenv, 'config',
+                              return_value={'ovn-source': 'fake-source'})
+        m.start()
+        self.target = ovn_charm.OVNConfigurationAdapter(
+            charm_instance=self.charm_instance)
+        m.stop()
+        setattr(self, 'config', None)
+        self.assertEquals('fake-source', self.target._ovn_source)
+
+        # User has not supplied a ovn-source config, charm was installed at
+        # this version on focal
+        m = mock.patch.object(ovn_charm.ch_core.hookenv, 'config',
+                              return_value={'ovn-source': ''})
+        m.start()
+        self.target = ovn_charm.OVNConfigurationAdapter(
+            charm_instance=self.charm_instance)
+        m.stop()
+        setattr(self, 'config', None)
+        self.assertEquals('cloud:focal-ovn-22.03', self.target._ovn_source)
+
+        # User has not supplied a ovn-source config, charm was upgraded
+        self.is_flag_set.return_value = False
+        self.assertEquals('', self.target._ovn_source)
+
+        # User has not supplied a ovn-source config, charm was installed at
+        # this version on jammy
+        self.is_flag_set.return_value = True
+        self.lsb_release.return_value = {'DISTRIB_CODENAME': 'jammy'}
+        self.assertEquals('', self.target._ovn_source)
+
 
 class TestOVNConfigurationAdapterSerial(test_utils.PatchHelper):
 
@@ -540,6 +576,7 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
             'prefer-chassis-as-gw': False,
             'dpdk-runtime-libraries': '',
             'vpd-device-spec': '',
+            'ovn-source': 'distro',
         }
         super().setUp(config=self.local_config)
 
@@ -726,6 +763,7 @@ class TestDPDKOVNChassisCharm(Helper):
             'dpdk-runtime-libraries': '',
             'vpd-device-spec': '',
             'pmd-cpu-set': '',
+            'ovn-source': 'distro',
         })
         self.patch_object(ovn_charm.OVNConfigurationAdapter,
                           '_ovs_dpdk_cpu_overlap_check')
@@ -997,6 +1035,37 @@ class TestDPDKOVNChassisCharm(Helper):
         self.assertFalse(self.target._should_linkdown('fake-port'))
 
 
+class TestOVNChassisCharmOvnSourceFocal(Helper):
+
+    def setUp(self):
+        super().setUp(config={'enable_dpdk': False,
+                              'ovn-source': ''})
+
+    def test_install(self):
+        self.patch_target('configure_source')
+        self.patch_target('run')
+        self.patch_target('update_api_ports')
+        self.patch_target('render_configs')
+        self.patch_target('remove_obsolete_packages')
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+
+        self.patch_object(ovn_charm.OVNConfigurationAdapter,
+                          '_ovn_source',
+                          new=mock.PropertyMock())
+        self._ovn_source.return_value = 'cloud:focal-ovn-22.03'
+        self.patch_object(ovn_charm.reactive, 'is_flag_set',
+                          side_effect=[False, True])
+        self.patch_object(ovn_charm.ch_fetch, 'add_source')
+        self.patch_object(ovn_charm.ch_fetch, 'apt_update')
+        self.target.install()
+        self.add_source.assert_called_once_with('cloud:focal-ovn-22.03')
+        self.apt_update.assert_called_once_with(fatal=True)
+        self.render_configs.assert_called_once_with(
+            ['/etc/default/openvswitch-switch'])
+        self.service_restart.assert_called_once_with(
+            'openvswitch-switch')
+
+
 class TestOVNChassisCharm(Helper):
 
     def setUp(self):
@@ -1011,6 +1080,7 @@ class TestOVNChassisCharm(Helper):
             'prefer-chassis-as-gw': True,
             'vpd-device-spec':
             '[{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}]',
+            'ovn-source': 'distro',
         })
 
     def test_optional_openstack_metadata(self):
@@ -1603,6 +1673,7 @@ class TestSRIOVOVNChassisCharm(Helper):
             'enable-dpdk': False,
             'bridge-interface-mappings': 'br-ex:eth0',
             'ovn-bridge-mappings': 'physnet2:br-ex',
+            'ovn-source': 'distro',
         }, is_flag_set_return_value=True)
         self.enable_openstack.return_value = True
 
@@ -1655,6 +1726,7 @@ class TestHWOffloadChassisCharm(Helper):
             'enable-dpdk': False,
             'bridge-interface-mappings': 'br-ex:eth0',
             'ovn-bridge-mappings': 'physnet2:br-ex',
+            'ovn-source': 'distro',
         })
 
     def test__init__(self):
