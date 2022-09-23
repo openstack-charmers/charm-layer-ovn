@@ -16,6 +16,7 @@ import os
 
 import charmhelpers.core as ch_core
 
+import charms.leadership as leadership
 import charms.reactive as reactive
 
 import charms_openstack.bus
@@ -26,16 +27,51 @@ charms_openstack.bus.discover()
 OVN_CHASSIS_ENABLE_HANDLERS_FLAG = 'charm.ovn.chassis.enable-handlers'
 
 
-@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG)
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'charm.installed')
 def enable_chassis_reactive_code():
     charm.use_defaults(
-        'charm.installed',
         'config.changed',
         'config.rendered',
         'update-status',
         'upgrade-charm',
         'certificates.available',
     )
+
+
+@reactive.when_none('charm.installed', 'leadership.set.install_stamp')
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'leadership.is_leader')
+def stamp_fresh_deployment():
+    """Stamp the deployment with leader setting, fresh deployment.
+
+    This is used to determine whether this application is a fresh or upgraded
+    deployment which influence the default of the `ovn-source` configuration
+    option.
+    """
+    leadership.leader_set(install_stamp=2203)
+
+
+@reactive.when_none('is-update-status-hook',
+                    'leadership.set.install_stamp',
+                    'leadership.set.upgrade_stamp')
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+               'charm.installed',
+               'leadership.is_leader')
+def stamp_upgraded_deployment():
+    """Stamp the deployment with leader setting, upgrade.
+
+    This is needed so that the units of this application can safely enable
+    the default install hook.
+    """
+    leadership.leader_set(upgrade_stamp=2203)
+
+
+@reactive.when_none('charm.installed', 'is-update-status-hook')
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG)
+@reactive.when_any('leadership.set.install_stamp',
+                   'leadership.set.upgrade_stamp')
+def enable_install():
+    """Enable the default install hook."""
+    charm.use_defaults('charm.installed')
 
 
 @reactive.when_none('charm.installed', 'charm.paused')
@@ -81,6 +117,12 @@ def enable_openstack():
 def configure_ovs():
     ovsdb = reactive.endpoint_from_flag('ovsdb.available')
     with charm.provide_charm_instance() as charm_instance:
+        if (reactive.is_flag_set('config.changed.source')
+                or reactive.is_flag_set('config.changed.ovn-source')):
+            charm_instance.upgrade_if_available(
+                    charm.optional_interfaces((ovsdb,),
+                                              'nova-compute.connected',
+                                              'amqp.connected'))
         if reactive.is_flag_set('config.changed.enable-dpdk'):
             # Install required packages and/or run update-alternatives
             charm_instance.install()

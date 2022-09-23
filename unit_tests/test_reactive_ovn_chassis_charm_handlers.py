@@ -24,7 +24,6 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
 
     def test_hooks(self):
         defaults = [
-            'charm.installed',
             'config.changed',
             'config.rendered',
             'charm.default-select-release',
@@ -38,7 +37,8 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'amqp.connected',),
                 'enable_chassis_reactive_code': (
-                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,),
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'charm.installed'),
                 'configure_ovs': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'ovsdb.available',
@@ -58,6 +58,15 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'ovsdb-subordinate.available',
                     'ovn.certs.changed'),
+                'stamp_fresh_deployment': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'leadership.is_leader'),
+                'stamp_upgraded_deployment': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'charm.installed',
+                    'leadership.is_leader'),
+                'enable_install': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,),
             },
             'when_none': {
                 'amqp_connection': ('charm.paused', 'is-update-status-hook'),
@@ -74,6 +83,14 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'provide_chassis_certificates_to_principal': (
                     'charm.paused',
                     'is-update-status-hook',),
+                'stamp_fresh_deployment': (
+                    'charm.installed', 'leadership.set.install_stamp'),
+                'stamp_upgraded_deployment': (
+                    'is-update-status-hook',
+                    'leadership.set.install_stamp',
+                    'leadership.set.upgrade_stamp'),
+                'enable_install': (
+                    'charm.installed', 'is-update-status-hook'),
             },
             'when_any': {
                 'configure_bridges': (
@@ -85,6 +102,9 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'config.changed.nagios_servicegroups',
                     'endpoint.nrpe-external-master.changed',
                     'nrpe-external-master.available'),
+                'enable_install': (
+                    'leadership.set.install_stamp',
+                    'leadership.set.upgrade_stamp'),
             },
         }
         # test that the hooks were registered via the
@@ -187,3 +207,18 @@ class TestOvnHandlers(test_utils.PatchHelper):
             ], any_order=True)
             ovsdb_subordinate.publish_chassis_certificates.\
                 assert_called_once_with('fakecert', 'fakecert', 'fakecert')
+
+    def test_stamp_fresh_deployment(self):
+        self.patch_object(handlers.leadership, 'leader_set')
+        handlers.stamp_fresh_deployment()
+        self.leader_set.assert_called_once_with(install_stamp=2203)
+
+    def test_stamp_upgraded_deployment(self):
+        self.patch_object(handlers.leadership, 'leader_set')
+        handlers.stamp_upgraded_deployment()
+        self.leader_set.assert_called_once_with(upgrade_stamp=2203)
+
+    def test_enable_install(self):
+        self.patch_object(handlers.charm, 'use_defaults')
+        handlers.enable_install()
+        self.use_defaults.assert_called_once_with('charm.installed')

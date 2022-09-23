@@ -378,6 +378,14 @@ class OVNConfigurationAdapter(
         self._validation_errors['pmd-cpu-mask'] = (
             'Fix overlap between dpdk-lcore-mask and pmd-cpu-mask.')
 
+    @property
+    def _ovn_source(self):
+        if (not self.ovn_source
+                and reactive.is_flag_set('leadership.set.install_stamp')
+                and ch_core.host.lsb_release()['DISTRIB_CODENAME'] == 'focal'):
+            return 'cloud:focal-ovn-22.03'
+        return self.ovn_source
+
 
 class NeutronPluginRelationAdapter(
         charms_openstack.adapters.OpenStackRelationAdapter):
@@ -610,8 +618,16 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             self.required_relations.append('amqp')
 
     def install(self):
-        """Extend the default install method to handle update-alternatives.
-        """
+        """Extend the default install method."""
+        if self.options.ovn_source:
+            # The end user has added configuration
+            self.configure_source(config_key='ovn-source')
+        elif self.options._ovn_source:
+            # The end user has not added configuration and we want to use the
+            # runtime determined default value.
+            ch_fetch.add_source(self.options._ovn_source)
+            ch_fetch.apt_update(fatal=True)
+
         super().install()
 
         if (not reactive.is_flag_set('charm.installed') and
