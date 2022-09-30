@@ -410,6 +410,17 @@ class OVNChassisCharmRelationAdapters(
 class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     """Base class for the OVN Chassis charms."""
     abstract_class = True
+    # Note that we currently do not support pivoting between release specific
+    # charm classes in the OVN charms.  We still need this set to ensure the
+    # default methods are happy.
+    #
+    # Also see docstring in the `upgrade_if_available` method.
+    package_codenames = {
+        'ovn-host': collections.OrderedDict([
+            ('20', 'ussuri'),
+            ('22', 'yoga'),
+        ]),
+    }
     nova_vhost_user_file = '/etc/tmpfiles.d/nova-ovs-vhost-user.conf'
     release_pkg = 'ovn-host'
     adapters_class = OVNChassisCharmRelationAdapters
@@ -617,17 +628,51 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 and 'amqp' not in self.required_relations):
             self.required_relations.append('amqp')
 
-    def install(self):
-        """Extend the default install method."""
+    def configure_ovn_source(self):
+        """Configure the OVN overlay archive."""
         if self.options.ovn_source:
-            # The end user has added configuration
+            # The end user has added configuration which may require full
+            # processing including key extraction.
             self.configure_source(config_key='ovn-source')
         elif self.options._ovn_source:
             # The end user has not added configuration and we want to use the
             # runtime determined default value.
+            #
+            # We cannot use the default `configure_source` method here as it
+            # attempts to access charm config directly.
             ch_fetch.add_source(self.options._ovn_source)
             ch_fetch.apt_update(fatal=True)
 
+    def configure_sources(self):
+        """Configure package sources for OVN charms.
+
+        The principal charms provide both a `source` and a `ovn-source`
+        configuration option, and the subordinate charms only provide the
+        `ovn-source` configuration option.
+
+        The `source` configuration option is tied into the charms.openstack
+        `source_config_key` class variable and is inteded to be used with a
+        full UCA archive.  The default methods and functions will apply special
+        meaning to the name used for further processing, and as such the
+        `source` configuration option is not suitable for use with an overlay
+        archive.
+
+        The `ovn-source` configuration option is intended to be used with a
+        slim overlay archive containing only OVN and its dependencies.
+
+        The two configuration options can be used simultaneously, and the
+        underlying charm-helpers code will write the configuration out into
+        separate files depending on the value of the options.
+
+        Ref: https://github.com/juju/charm-helpers/commit/982319b136b
+        """
+        self.configure_ovn_source()
+        if self.source_config_key:
+            self.configure_source()
+
+    def install(self):
+        """Extend the default install method."""
+        self.configure_sources()
         super().install()
 
         if (not reactive.is_flag_set('charm.installed') and
@@ -684,6 +729,40 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             ch_fetch.apt_update(fatal=True)
         except FileNotFoundError:
             pass
+
+        # Ensure that `config.changed.ovn-source` flag is not set on charm
+        # upgrade.  When upgrading from an older charm, this flag will be
+        # set even though the config has not changed.
+        reactive.clear_flag('config.changed.ovn-source')
+
+    def ovn_upgrade_available(self, package=None, snap=None):
+        """Determine whether an OVN upgrade is available.
+
+        Make use of the installed package version and the package version
+        available in the apt cache to determine availability of new version.
+        """
+        self.configure_sources()
+        cur_vers = self.get_package_version(self.release_pkg,
+                                            apt_cache_sufficient=False)
+        avail_vers = self.get_package_version(self.release_pkg,
+                                              apt_cache_sufficient=True)
+        ch_fetch.apt_pkg.init()
+        return ch_fetch.apt_pkg.version_compare(avail_vers, cur_vers) == 1
+
+    def upgrade_if_available(self, interfaces_list):
+        """Upgrade OVN if an upgrade is available.
+
+        At present there is no need to pivot to a release specific charm class
+        when upgrading OVN.  As such we override the default method to keep
+        this simpler, given OVN versions are not fully represented in the
+        OpenStack version machinery that the default method relies on.
+
+        :param interfaces_list: List of instances of interface classes
+        :returns: None
+        """
+        if self.ovn_upgrade_available(self.release_pkg):
+            self.do_openstack_pkg_upgrade(upgrade_openstack=False)
+            self.render_with_interfaces(interfaces_list)
 
     def resume(self):
         """Do full hook execution on resume.

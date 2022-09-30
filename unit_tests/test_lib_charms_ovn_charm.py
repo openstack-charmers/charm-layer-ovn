@@ -1041,29 +1041,44 @@ class TestOVNChassisCharmOvnSourceFocal(Helper):
         super().setUp(config={'enable_dpdk': False,
                               'ovn-source': ''})
 
-    def test_install(self):
+    def test_configure_sources(self):
+        self.target.source_config_key = ''
+        self.patch_target('configure_ovn_source')
         self.patch_target('configure_source')
-        self.patch_target('run')
-        self.patch_target('update_api_ports')
-        self.patch_target('render_configs')
-        self.patch_target('remove_obsolete_packages')
-        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.target.configure_sources()
+        self.configure_ovn_source.assert_called_once_with()
+        self.assertFalse(self.configure_source.called)
 
+    def test_configure_ovn_source(self):
         self.patch_object(ovn_charm.OVNConfigurationAdapter,
                           '_ovn_source',
                           new=mock.PropertyMock())
         self._ovn_source.return_value = 'cloud:focal-ovn-22.03'
-        self.patch_object(ovn_charm.reactive, 'is_flag_set',
-                          side_effect=[False, True])
         self.patch_object(ovn_charm.ch_fetch, 'add_source')
         self.patch_object(ovn_charm.ch_fetch, 'apt_update')
-        self.target.install()
+        self.target.configure_ovn_source()
         self.add_source.assert_called_once_with('cloud:focal-ovn-22.03')
-        self.apt_update.assert_called_once_with(fatal=True)
-        self.render_configs.assert_called_once_with(
-            ['/etc/default/openvswitch-switch'])
-        self.service_restart.assert_called_once_with(
-            'openvswitch-switch')
+
+        self.add_source.reset_mock()
+        self._ovn_source.return_value = ''
+        self.target.configure_ovn_source()
+        self.assertFalse(self.add_source.called)
+
+
+class TestOVNDedicatedChassisCharmSourceOption(Helper):
+
+    def setUp(self):
+        super().setUp(config={'enable_dpdk': False,
+                              'source': 'cloud:focal-yoga',
+                              'ovn-source': ''})
+
+    def test_configure_sources(self):
+        self.target.source_config_key = 'source'
+        self.patch_target('configure_ovn_source')
+        self.patch_target('configure_source')
+        self.target.configure_sources()
+        self.configure_ovn_source.assert_called_once_with()
+        self.configure_source.assert_called_once_with()
 
 
 class TestOVNChassisCharm(Helper):
@@ -1662,6 +1677,35 @@ class TestOVNChassisCharm(Helper):
         # DPDK port with interfaces that should not be bound to kernel driver
         self._get_port_type.return_value = 'dpdk'
         self.assertFalse(self.target._should_linkdown('fake-port'))
+
+    def test_ovn_upgrade_available(self):
+        self.patch_target('configure_source')
+        self.patch_target('get_package_version')
+        self.get_package_version.side_effect = ['20.03.0', '22.03.0']
+        self.patch_object(ovn_charm.ch_fetch.apt_pkg, 'version_compare')
+        self.version_compare.return_value = 1
+        self.assertTrue(self.target.ovn_upgrade_available())
+        self.version_compare.assert_called_once_with('22.03.0', '20.03.0')
+        self.get_package_version.side_effect = ['20.03.0', '22.03.0']
+        self.version_compare.return_value = 0
+        self.assertFalse(self.target.ovn_upgrade_available())
+
+    def test_upgrade_if_available(self):
+        self.patch_target('ovn_upgrade_available')
+        self.patch_target('do_openstack_pkg_upgrade')
+        self.patch_target('render_with_interfaces')
+        # No upgrade available
+        self.target.upgrade_if_available('fake-interface-list')
+        self.assertFalse(self.do_openstack_pkg_upgrade.called)
+        self.assertFalse(self.render_with_interfaces.called)
+
+        # Upgrade available
+        self.ovn_upgrade_available.return_value = True
+        self.target.upgrade_if_available('fake-interface-list')
+        self.do_openstack_pkg_upgrade.assert_called_once_with(
+            upgrade_openstack=False)
+        self.render_with_interfaces.assert_called_once_with(
+            'fake-interface-list')
 
 
 class TestSRIOVOVNChassisCharm(Helper):
