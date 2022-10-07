@@ -21,7 +21,6 @@ import charms.reactive as reactive
 import charms_openstack.bus
 import charms_openstack.charm as charm
 
-from charms.layer import snap
 
 charms_openstack.bus.discover()
 OVN_CHASSIS_ENABLE_HANDLERS_FLAG = 'charm.ovn.chassis.enable-handlers'
@@ -186,26 +185,13 @@ def provide_chassis_certificates_to_principal():
 @reactive.when_any('config.changed.ovs-exporter-channel',
                    'snap.installed.prometheus-ovs-exporter')
 def reassess_exporter():
-    is_installed = snap.is_installed('prometheus-ovs-exporter')
-    channel = None
     with charm.provide_charm_instance() as instance:
         channel = instance.options.ovs_exporter_snap_channel
-
-    if channel is None:
-        # Attempt to remove the snap if it is present, the snap command
-        # returns 0 if the snap is not installed.
-        snap.remove('prometheus-ovs-exporter')
-        return
-
-    if is_installed:
-        snap.refresh('prometheus-ovs-exporter', channel=channel,
-                     devmode=True)
-    else:
-        snap.install('prometheus-ovs-exporter', channel=channel,
-                     devmode=True)
+        charm.assess_exporter()
 
 
-@reactive.when('metrics-endpoint.available',
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'charm.installed',
+               'metrics-endpoint.available',
                'snap.installed.prometheus-ovs-exporter')
 def handle_metrics_endpoint():
     metrics_endpoint = reactive.endpoint_from_flag(
@@ -216,7 +202,8 @@ def handle_metrics_endpoint():
         static_configs=[{"targets": ["*:9475"]}])
 
 
-@reactive.when('metrics-endpoint.available')
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'charm.installed',
+               'metrics-endpoint.available')
 @reactive.when_not('snap.installed.prometheus-ovs-exporter')
 def maybe_clear_metrics_endpoint():
     """Clear the metrics endpoint state if the exporter isn't installed.

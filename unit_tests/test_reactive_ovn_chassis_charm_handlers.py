@@ -68,10 +68,18 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'enable_install': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,),
                 'handle_metrics_endpoint': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'charm.installed',
                     'metrics-endpoint.available',
                     'snap.installed.prometheus-ovs-exporter',
                 ),
+                'reassess_exporter': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'charm.installed',
+                ),
                 'maybe_clear_metrics_endpoint': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'charm.installed',
                     'metrics-endpoint.available',
                 ),
             },
