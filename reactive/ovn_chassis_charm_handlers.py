@@ -182,14 +182,15 @@ def provide_chassis_certificates_to_principal():
     reactive.clear_flag('ovn.certs.changed')
 
 
+@reactive.when_none('is-update-status-hook')
 @reactive.when_any('config.changed.ovs-exporter-channel',
                    'snap.installed.prometheus-ovs-exporter')
 def reassess_exporter():
     with charm.provide_charm_instance() as instance:
-        channel = instance.options.ovs_exporter_snap_channel
-        charm.assess_exporter()
+        instance.assess_exporter()
 
 
+@reactive.when_none('is-update-status-hook')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'charm.installed',
                'metrics-endpoint.available',
                'snap.installed.prometheus-ovs-exporter')
@@ -202,6 +203,7 @@ def handle_metrics_endpoint():
         static_configs=[{"targets": ["*:9475"]}])
 
 
+@reactive.when_none('is-update-status-hook')
 @reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG, 'charm.installed',
                'metrics-endpoint.available')
 @reactive.when_not('snap.installed.prometheus-ovs-exporter')

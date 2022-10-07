@@ -114,6 +114,12 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'leadership.set.upgrade_stamp'),
                 'enable_install': (
                     'charm.installed', 'is-update-status-hook'),
+                'reassess_exporter': (
+                    'is-update-status-hook',),
+                'maybe_clear_metrics_endpoint': (
+                    'is-update-status-hook',),
+                'handle_metrics_endpoint': (
+                    'is-update-status-hook',),
             },
             'when_any': {
                 'configure_bridges': (
