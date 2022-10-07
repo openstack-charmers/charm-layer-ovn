@@ -4,6 +4,7 @@ includes:
   - interface:ovsdb
   - interface:rabbitmq
   - interface:nrpe-external-master
+  - interface:prometheus-scrape
 exclude: 
   - .gitignore
   - .stestr.conf

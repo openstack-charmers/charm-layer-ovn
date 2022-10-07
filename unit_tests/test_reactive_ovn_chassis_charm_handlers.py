@@ -67,6 +67,29 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'leadership.is_leader'),
                 'enable_install': (
                     handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,),
+                'handle_metrics_endpoint': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'charm.installed',
+                    'metrics-endpoint.available',
+                    'snap.installed.prometheus-ovs-exporter',
+                ),
+                'reassess_exporter': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'charm.installed',
+                ),
+                'maybe_clear_metrics_endpoint': (
+                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+                    'charm.installed',
+                    'metrics-endpoint.available',
+                ),
+            },
+            'when_not': {
+                'snap_install': (
+                    'snap.installed.prometheus-ovs-exporter',
+                ),
+                'maybe_clear_metrics_endpoint': (
+                    'snap.installed.prometheus-ovs-exporter',
+                ),
             },
             'when_none': {
                 'amqp_connection': ('charm.paused', 'is-update-status-hook'),
@@ -91,6 +114,12 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'leadership.set.upgrade_stamp'),
                 'enable_install': (
                     'charm.installed', 'is-update-status-hook'),
+                'reassess_exporter': (
+                    'is-update-status-hook',),
+                'maybe_clear_metrics_endpoint': (
+                    'is-update-status-hook',),
+                'handle_metrics_endpoint': (
+                    'is-update-status-hook',),
             },
             'when_any': {
                 'configure_bridges': (
@@ -105,6 +134,9 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                 'enable_install': (
                     'leadership.set.install_stamp',
                     'leadership.set.upgrade_stamp'),
+                'reassess_exporter': (
+                    'config.changed.ovs-exporter-channel',
+                    'snap.installed.prometheus-ovs-exporter'),
             },
         }
         # test that the hooks were registered via the

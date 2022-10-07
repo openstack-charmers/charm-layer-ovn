@@ -1096,6 +1096,7 @@ class TestOVNChassisCharm(Helper):
             'vpd-device-spec':
             '[{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}]',
             'ovn-source': 'distro',
+            'ovs-exporter-channel': '',
         })
 
     def test_optional_openstack_metadata(self):
@@ -1706,6 +1707,74 @@ class TestOVNChassisCharm(Helper):
             upgrade_openstack=False)
         self.render_with_interfaces.assert_called_once_with(
             'fake-interface-list')
+
+    def test_assess_exporter_no_channel_installed(self):
+        self.patch_object(ovn_charm.snap, 'is_installed')
+        self.patch_object(ovn_charm.snap, 'install')
+        self.patch_object(ovn_charm.snap, 'remove')
+        self.patch_object(ovn_charm.snap, 'refresh')
+
+        self.is_installed.return_value = True
+
+        self.target.assess_exporter()
+        self.remove.assert_called_once_with('prometheus-ovs-exporter')
+        self.install.assert_not_called()
+        self.refresh.assert_not_called()
+
+    def test_assess_exporter_no_channel_not_installed(self):
+        self.patch_object(ovn_charm.snap, 'is_installed')
+        self.patch_object(ovn_charm.snap, 'install')
+        self.patch_object(ovn_charm.snap, 'remove')
+        self.patch_object(ovn_charm.snap, 'refresh')
+
+        self.is_installed.return_value = False
+
+        self.target.assess_exporter()
+        self.install.assert_not_called()
+        self.refresh.assert_not_called()
+        self.remove.assert_not_called()
+
+
+class TestOVNChassisCharmOvsExporter(Helper):
+
+    def setUp(self):
+        super().setUp(config={
+            'ovs-exporter-channel': 'stable',
+        })
+
+    def test_assess_exporter_fresh_install(self):
+        self.patch_object(ovn_charm.snap, 'is_installed')
+        self.patch_object(ovn_charm.snap, 'install')
+        self.patch_object(ovn_charm.snap, 'remove')
+        self.patch_object(ovn_charm.snap, 'refresh')
+
+        self.is_installed.return_value = False
+
+        self.target.assess_exporter()
+
+        self.install.assert_called_once_with(
+            'prometheus-ovs-exporter',
+            channel='stable',
+            devmode=True)
+        self.remove.assert_not_called()
+        self.refresh.assert_not_called()
+
+    def test_assess_exporter_refresh(self):
+        self.patch_object(ovn_charm.snap, 'is_installed')
+        self.patch_object(ovn_charm.snap, 'install')
+        self.patch_object(ovn_charm.snap, 'remove')
+        self.patch_object(ovn_charm.snap, 'refresh')
+
+        self.is_installed.return_value = True
+
+        self.target.assess_exporter()
+
+        self.refresh.assert_called_once_with(
+            'prometheus-ovs-exporter',
+            channel='stable',
+            devmode=True)
+        self.install.assert_not_called()
+        self.remove.assert_not_called()
 
 
 class TestSRIOVOVNChassisCharm(Helper):
