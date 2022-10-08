@@ -1,6 +1,7 @@
 includes:
   - layer:openstack
   - layer:leadership
+  - layer:snap
   - interface:ovsdb
   - interface:rabbitmq
   - interface:nrpe-external-master
