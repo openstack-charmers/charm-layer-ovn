@@ -1,1 +1,5 @@
 jsonschema
+
+# https://github.com/pallets/jinja/issues/1496
+# https://github.com/juju/charm-tools/issues/646
+Jinja2<3;python_version == '3.8'
