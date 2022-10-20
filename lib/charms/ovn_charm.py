@@ -1425,3 +1425,4 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         else:
             snap.install('prometheus-ovs-exporter', channel=channel,
                          devmode=True)
+        snap.connect_all()
