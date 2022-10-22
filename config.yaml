@@ -165,12 +165,8 @@ options:
     type: boolean
     default: false
     description: |
-      NOTE: Support for hardware offload in conjunction with OVN is an
-      experimental feature.
-      .
       Enable support for hardware offload of flows from Open vSwitch to
-      supported network adapters.  This feature has only been tested on
-      Mellanox ConnectX 5 adapters.
+      supported network adapters.
       .
       Enabling this option will make use of the sriov-numvfs option to
       configure the VF functions of the physical network adapters detected in
@@ -178,9 +174,9 @@ options:
       .
       This option must not be enabled with either enable-sriov or enable-dpdk.
       .
-      NOTE: Changing this value will not perform hardware specific adaption. A
-      manual restart of the hardware specific adaption service or reboot of the
-      system is required to apply configuration.
+      NOTE: Changing this value will not perform runtime changes to hardware
+      specific adaption. A reboot of the system is required to apply
+      configuration.
   enable-sriov:
     type: boolean
     default: false
@@ -259,8 +255,8 @@ options:
       spaces.
       .
       NOTE: Changing this value will have no effect on runtime configuration. A
-      manual restart of the `sriov-netplan-shim` service or reboot of the
-      system is required to apply configuration.
+      manual issue of the `netplan apply` command or reboot of the system is
+      required to apply configuration.
   new-units-paused:
     type: boolean
     default: false
