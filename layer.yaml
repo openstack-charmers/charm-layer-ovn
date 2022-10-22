@@ -29,8 +29,8 @@ options:
         - ['prometheus-ovs-exporter:network-observe', ':network-observe']
         - ['prometheus-ovs-exporter:openvswitch', ':openvswitch']
         - ['prometheus-ovs-exporter:system-observe', ':system-observe']
-        # - ['prometheus-ovs-exporter:etc-openvswitch', ':system-files']
-        # - ['prometheus-ovs-exporter:run-openvswitch', ':system-files']
+        - ['prometheus-ovs-exporter:etc-openvswitch', ':system-files']
+        - ['prometheus-ovs-exporter:run-openvswitch', ':system-files']
 repo: https://github.com/openstack-charmers/charm-layer-ovn
 config:
   deletes:

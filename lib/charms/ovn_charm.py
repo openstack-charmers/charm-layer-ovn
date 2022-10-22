@@ -1420,9 +1420,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
             return
 
         if is_installed:
-            snap.refresh('prometheus-ovs-exporter', channel=channel,
-                         devmode=True)
+            snap.refresh('prometheus-ovs-exporter', channel=channel)
         else:
-            snap.install('prometheus-ovs-exporter', channel=channel,
-                         devmode=True)
+            snap.install('prometheus-ovs-exporter', channel=channel)
         snap.connect_all()
