@@ -1341,6 +1341,15 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         if self.options.card_serial_number:
             cms_opts.append(
                 f'card-serial-number={self.options.card_serial_number}')
+        if self.options.availability_zone_mapping:
+            try:
+                mapping = json.loads(self.options.availability_zone_mapping)
+                value = mapping.get(ch_core.hookenv.local_unit())
+                if value:
+                    cms_opts.append('availability-zones={}'.format(value))
+            except json.JSONDecodeError as e:
+                raise ValueError(
+                    'Failed to decode availability-zone-mapping: {}'.format(e))
         return cms_opts
 
     def render_nrpe(self):

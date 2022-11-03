@@ -760,6 +760,7 @@ class TestDPDKOVNChassisCharm(Helper):
             'ovn-bridge-mappings': (
                 'provider:br-ex other:br-data'),
             'prefer-chassis-as-gw': False,
+            'availability-zone-mapping': '',
             'dpdk-runtime-libraries': '',
             'vpd-device-spec': '',
             'pmd-cpu-set': '',
@@ -1093,6 +1094,8 @@ class TestOVNChassisCharm(Helper):
             'ovn-bridge-mappings': (
                 'provider:br-provider other:br-other'),
             'prefer-chassis-as-gw': True,
+            'availability-zone-mapping': '{"ovn-chassis/0": "az2:az3",'
+                                         ' "ovn-chassis/1": "az1:az2:az3"}',
             'vpd-device-spec':
             '[{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}]',
             'ovn-source': 'distro',
@@ -1339,6 +1342,8 @@ class TestOVNChassisCharm(Helper):
         self.patch_target('check_if_paused')
         self.check_if_paused.return_value = ('some', 'reason')
         self.patch_target('_get_port_type')
+        self.patch_object(ovn_charm.ch_core.hookenv, 'local_unit')
+        self.local_unit.return_value = 'ovn-chassis/1'
         self._get_port_type.return_value = ''
         self.target.configure_bridges()
         self.BridgePortInterfaceMap.assert_not_called()
@@ -1399,8 +1404,33 @@ class TestOVNChassisCharm(Helper):
             mock.call('.', 'external_ids:ovn-bridge-mappings',
                       'other:br-other,provider:br-provider'),
             mock.call('.', 'external_ids:ovn-cms-options',
-                      'enable-chassis-as-gw,card-serial-number=c4rd-53r14l'),
+                      'enable-chassis-as-gw,card-serial-number=c4rd-53r14l,'
+                      'availability-zones=az1:az2:az3'),
         ], any_order=True)
+
+    def test_configure_bridges_az_mapping_error(self):
+        def _new_fake_config(x=None):
+            cfg = {
+                'enable-hardware-offload': False,
+                'enable-sriov': False,
+                'enable-dpdk': False,
+                'bridge-interface-mappings': (
+                    'br-provider:00:01:02:03:04:05 br-other:eth5'),
+                'ovn-bridge-mappings': (
+                    'provider:br-provider other:br-other'),
+                'prefer-chassis-as-gw': True,
+                'availability-zone-mapping': '{"ovn-chassis/0": "az2:az3",'
+                                             ' "ovn-chassis/1": "az1:az2:az3}',
+                'vpd-device-spec':
+                '[{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}]',
+                'ovn-source': 'distro',
+                'ovs-exporter-channel': '',
+            }
+            if x:
+                return cfg.get(x)
+            return cfg
+        self.config.side_effect = _new_fake_config
+        self.assertRaises(ValueError, self.test_configure_bridges)
 
     def test_wrong_configure_bridges(self):
         self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
