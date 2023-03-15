@@ -15,6 +15,7 @@
 import collections
 import copy
 import io
+import os
 import textwrap
 import subprocess
 import unittest.mock as mock
@@ -764,6 +765,7 @@ class TestDPDKOVNChassisCharm(Helper):
             'vpd-device-spec': '',
             'pmd-cpu-set': '',
             'ovn-source': 'distro',
+            'customize-failure-domain': False,
         })
         self.patch_object(ovn_charm.OVNConfigurationAdapter,
                           '_ovs_dpdk_cpu_overlap_check')
@@ -1097,6 +1099,7 @@ class TestOVNChassisCharm(Helper):
             '[{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}]',
             'ovn-source': 'distro',
             'ovs-exporter-channel': '',
+            'customize-failure-domain': False,
         })
 
     def test_optional_openstack_metadata(self):
@@ -1733,6 +1736,13 @@ class TestOVNChassisCharm(Helper):
         self.install.assert_not_called()
         self.refresh.assert_not_called()
         self.remove.assert_not_called()
+
+    @mock.patch.dict(os.environ, {"JUJU_AVAILABILITY_ZONE": "az1"}, clear=True)
+    def test_configure_customize_failure_domain(self):
+        self.target.options.customize_failure_domain = True
+        self.assertEqual(
+            self.target._get_ovn_cms_options(),
+            ['enable-chassis-as-gw', 'availability-zones=az1'])
 
 
 class TestOVNChassisCharmOvsExporter(Helper):

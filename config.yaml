@@ -297,6 +297,16 @@ options:
       .
       NOTE: It is also possible to enable this option on several OVN chassis
       applications at the same time, e.g. on 2 out of 3.
+  customize-failure-domain:
+    type: boolean
+    default: false
+    description: |
+      Juju propagates availability zone information to charms from the
+      underlying machine provider such as MAAS and this option allows the
+      charm to use JUJU_AVAILABILITY_ZONE to set default_availability_zone for
+      OVN nodes. This option overrides the default-availability-zone charm
+      config setting only when the Juju provider sets JUJU_AVAILABILITY_ZONE.
+      More details: https://docs.openstack.org/neutron/latest/admin/ovn/availability_zones.html
   nagios_context:
     default: "juju"
     type: string
