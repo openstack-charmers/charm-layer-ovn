@@ -1341,6 +1341,10 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         if self.options.card_serial_number:
             cms_opts.append(
                 f'card-serial-number={self.options.card_serial_number}')
+        if self.options.customize_failure_domain and \
+           'JUJU_AVAILABILITY_ZONE' in os.environ:
+            cms_opts.append(
+                f'availability-zones={os.environ["JUJU_AVAILABILITY_ZONE"]}')
         return cms_opts
 
     def render_nrpe(self):
