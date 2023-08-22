@@ -1086,7 +1086,7 @@ class TestOVNDedicatedChassisCharmSourceOption(Helper):
 class TestOVNChassisCharm(Helper):
 
     def setUp(self):
-        super().setUp(config={
+        self.local_config = {
             'enable-hardware-offload': False,
             'enable-sriov': False,
             'enable-dpdk': False,
@@ -1099,7 +1099,9 @@ class TestOVNChassisCharm(Helper):
             '[{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}]',
             'ovn-source': 'distro',
             'ovs-exporter-channel': '',
-        })
+            'enable-version-pinning': False,
+        }
+        super().setUp(config=self.local_config)
 
     def test_optional_openstack_metadata(self):
         self.assertEquals(self.target.packages, ['ovn-host'])
@@ -1235,7 +1237,7 @@ class TestOVNChassisCharm(Helper):
                 '--', 'set', 'open-vswitch', '.',
                 'external-ids:ovn-remote=fake-sb-conn-str',
                 '--', 'set', 'open-vswitch', '.',
-                'external_ids:ovn-match-northd-version=true',
+                'external_ids:ovn-match-northd-version=False',
             ),
         ])
         self.service_restart.assert_not_called()
@@ -1261,7 +1263,7 @@ class TestOVNChassisCharm(Helper):
                 '--', 'set', 'open-vswitch', '.',
                 'external-ids:ovn-remote=fake-sb-conn-str',
                 '--', 'set', 'open-vswitch', '.',
-                'external_ids:ovn-match-northd-version=true',
+                'external_ids:ovn-match-northd-version=False',
             ),
             mock.call('ovs-vsctl', '--id', '@manager',
                       'create', 'Manager', 'target="ptcp:6640:127.0.0.1"',
@@ -1269,6 +1271,39 @@ class TestOVNChassisCharm(Helper):
                       '@manager'),
         ])
         assert self.service_restart.called
+
+    def test_configure_ovs_version_pinning(self):
+        self.local_config.update({'enable-version-pinning': True})
+        self.target = ovn_charm.BaseOVNChassisCharm()
+        self.patch_target('run')
+        self.patch_object(ovn_charm.OVNConfigurationAdapter, 'ovn_key')
+        self.patch_object(ovn_charm.OVNConfigurationAdapter, 'ovn_cert')
+        self.patch_object(ovn_charm.OVNConfigurationAdapter, 'ovn_ca_cert')
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.patch_target('get_data_ip')
+        self.get_data_ip.return_value = 'fake-data-ip'
+        self.patch_target('get_ovs_hostname')
+        self.get_ovs_hostname.return_value = 'fake-ovs-hostname'
+        self.patch_target('check_if_paused')
+        self.check_if_paused.return_value = (None, None)
+        self.target.configure_ovs('fake-sb-conn-str', False)
+        self.run.assert_has_calls([
+            mock.call('ovs-vsctl', '--no-wait', 'set-ssl',
+                      mock.ANY, mock.ANY, mock.ANY),
+            mock.call(
+                'ovs-vsctl',
+                '--', 'set', 'open-vswitch', '.',
+                'external-ids:ovn-encap-type=geneve',
+                '--', 'set', 'open-vswitch', '.',
+                'external-ids:ovn-encap-ip=fake-data-ip',
+                '--', 'set', 'open-vswitch', '.',
+                'external-ids:system-id=fake-ovs-hostname',
+                '--', 'set', 'open-vswitch', '.',
+                'external-ids:ovn-remote=fake-sb-conn-str',
+                '--', 'set', 'open-vswitch', '.',
+                'external_ids:ovn-match-northd-version=True',
+            ),
+        ])
 
     def test_render_nrpe(self):
         self.patch_object(ovn_charm.nrpe, 'NRPE')
