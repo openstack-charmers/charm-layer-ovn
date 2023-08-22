@@ -446,7 +446,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     configuration_class = OVNConfigurationAdapter
     required_relations = [CERT_RELATION, 'ovsdb']
     python_version = 3
-    enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
     # Extra packages and services to be installed, managed and monitored if
     # charm forms part of an Openstack Deployment
