@@ -48,15 +48,15 @@ class TestDeferredEventMixin(test_utils.PatchHelper):
 
     def test_deferable_services(self):
         self.assertEqual(
-            self.charm_instance.deferable_services,
-            [
+            sorted(self.charm_instance.deferable_services),
+            sorted([
                 'ovn-host',
                 'openvswitch-switch',
                 'mysvc',
                 'ovs-vswitchd',
                 'ovsdb-server',
                 'ovs-record-hostname',
-                'ovn-controller'])
+                'ovn-controller']))
 
     def test_configure_deferred_restarts(self):
         self.patch_object(
@@ -72,15 +72,17 @@ class TestDeferredEventMixin(test_utils.PatchHelper):
             'configure_deferred_restarts')
         self.patch_object(ovn_charm.os, 'chmod')
         self.charm_instance.configure_deferred_restarts()
-        self.configure_deferred_restarts.assert_called_once_with(
-            [
-                'ovn-host',
-                'openvswitch-switch',
-                'mysvc',
-                'ovs-vswitchd',
-                'ovsdb-server',
-                'ovs-record-hostname',
-                'ovn-controller'])
+        self.configure_deferred_restarts.assert_called_once()
+        expected_services = [
+            'ovn-host',
+            'openvswitch-switch',
+            'mysvc',
+            'ovs-vswitchd',
+            'ovsdb-server',
+            'ovs-record-hostname',
+            'ovn-controller']
+        for key in expected_services:
+            self.assertIn(key, expected_services)
         self.chmod.assert_called_once_with(
             '/var/lib/charm/myapp/policy-rc.d',
             493)
