@@ -305,3 +305,19 @@ options:
       .
       Changing this config option will restart openvswitch-switch, resulting
       in an expected data plane outage while the service restarts.
+  enable-version-pinning:
+    type: boolean
+    default: true
+    description: |
+      OVN is a distributed system, and special consideration must be given to
+      the process used to upgrade OVN.
+
+      In order to successfully perform a rolling upgrade, the ovn-controller
+      process needs to understand the structure of the database for the version
+      you are upgrading from and to simultaneously.
+
+      Rolling upgrades are supported as long as the span of versions used in
+      the system is within the previous and the next upstream OVN LTS version.
+
+      If you are upgrading across LTS boundaries you may need to use version
+      pinning to avoid data plane outage during the upgrade.
