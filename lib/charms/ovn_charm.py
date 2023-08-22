@@ -446,7 +446,6 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
     configuration_class = OVNConfigurationAdapter
     required_relations = [CERT_RELATION, 'ovsdb']
     python_version = 3
-    enable_openstack = False
     bridges_key = 'bridge-interface-mappings'
     # Extra packages and services to be installed, managed and monitored if
     # charm forms part of an Openstack Deployment
@@ -1128,7 +1127,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                            'external-ids:system-id={}'
                            .format(self.get_ovs_hostname()),
                            'external-ids:ovn-remote={}'.format(sb_conn),
-                           'external_ids:ovn-match-northd-version=true',
+                           'external_ids:ovn-match-northd-version={}'
+                           .format(self.options.enable_version_pinning),
                            ):
             cmd = cmd + ('--', 'set', 'open-vswitch', '.', ovs_ext_id)
         self.run(*cmd)
