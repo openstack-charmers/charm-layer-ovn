@@ -129,6 +129,10 @@ def configure_ovs():
             charm.optional_interfaces((ovsdb,),
                                       'nova-compute.connected',
                                       'amqp.connected'))
+        if not ovsdb.db_sb_connection_strs:
+            ch_core.hookenv.log('No OVNSDB connection details available',
+                                level=ch_core.hookenv.INFO)
+            return
         charm_instance.configure_ovs(
             ','.join(ovsdb.db_sb_connection_strs),
             reactive.is_flag_set('config.changed.disable-mlockall'))

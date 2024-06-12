@@ -207,6 +207,20 @@ class TestOvnHandlers(test_utils.PatchHelper):
         self.charm.configure_iptables_rules.assert_called_once_with()
         self.charm.assess_status.assert_called_once_with()
 
+    def test_configure_ovs_no_ovnsdb(self):
+        self.patch_object(handlers.reactive, 'endpoint_from_flag')
+        self.patch_object(handlers.charm, 'optional_interfaces')
+        self.patch_object(handlers.reactive, 'set_flag')
+        self.patch_object(handlers.reactive, 'is_flag_set', return_value=True)
+        ovsdb = mock.MagicMock()
+        ovsdb.db_sb_connection_strs = []
+        self.endpoint_from_flag.return_value = ovsdb
+        handlers.configure_ovs()
+        self.charm.configure_ovs.assert_not_called()
+        self.set_flag.assert_not_called()
+        self.charm.configure_bridges.assert_not_called()
+        self.charm.assess_status.assert_not_called()
+
     def test_configure_nrpe(self):
         self.patch_object(handlers.reactive, 'endpoint_from_flag')
         self.endpoint_from_flag.return_value = 'nrpe-external-master'
