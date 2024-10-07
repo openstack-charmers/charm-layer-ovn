@@ -14,13 +14,21 @@
 
 import sys
 
+import mock
+
 sys.path.append('lib')
 
 # Mock out charmhelpers so that we can test without it.
 import charms_openstack.test_mocks  # noqa
+
+# charms.openstack (commit b90327) re-introduced a dependency on charmhelpers
+# so we need to mock that out explicitly here since we do not install
+# charmhelpers as a test dependency.
+sys.modules['charmhelpers.contrib.openstack.utils'] = mock.MagicMock()
+sys.modules['charmhelpers.contrib.openstack.utils'].\
+    CompareOpenStackReleases = mock.MagicMock()
 charms_openstack.test_mocks.mock_charmhelpers()
 
-import mock
 import charms
 
 

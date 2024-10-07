@@ -1099,20 +1099,28 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                  self.options.ovn_cert,
                  self.options.ovn_ca_cert)
 
-        # The local ``ovn-controller`` process will retrieve information about
-        # how to connect to OVN from the local Open vSwitch database.
-        cmd = ('ovs-vsctl',)
-        for ovs_ext_id in ('external-ids:ovn-encap-type=geneve',
-                           'external-ids:ovn-encap-ip={}'
-                           .format(self.get_data_ip()),
-                           'external-ids:system-id={}'
-                           .format(self.get_ovs_hostname()),
-                           'external-ids:ovn-remote={}'.format(sb_conn),
-                           'external_ids:ovn-match-northd-version={}'
-                           .format(self.options.enable_version_pinning),
-                           ):
-            cmd = cmd + ('--', 'set', 'open-vswitch', '.', ovs_ext_id)
-        self.run(*cmd)
+        if sb_conn:
+            # The local ``ovn-controller`` process will retrieve information
+            # about how to connect to OVN from the local Open vSwitch
+            # database.
+            cmd = ('ovs-vsctl',)
+            for ovs_ext_id in ('external-ids:ovn-encap-type=geneve',
+                               'external-ids:ovn-encap-ip={}'
+                               .format(self.get_data_ip()),
+                               'external-ids:system-id={}'
+                               .format(self.get_ovs_hostname()),
+                               'external-ids:ovn-remote={}'.format(sb_conn),
+                               'external_ids:ovn-match-northd-version={}'
+                               .format(self.options.enable_version_pinning),
+                               ):
+                cmd = cmd + ('--', 'set', 'open-vswitch', '.', ovs_ext_id)
+            self.run(*cmd)
+        else:
+            ch_core.hookenv.log('could not configure ovs due to unavailable '
+                                'sbdb connection info - ovn-central relation '
+                                'no longer available?',
+                                level=ch_core.hookenv.WARNING)
+
         if self.enable_openstack:
             # OpenStack Nova expects the local OVSDB server to listen to
             # TCP port 6640 on localhost.  We use this for the OVN metadata
