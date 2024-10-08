@@ -207,6 +207,26 @@ class TestOvnHandlers(test_utils.PatchHelper):
         self.charm.configure_iptables_rules.assert_called_once_with()
         self.charm.assess_status.assert_called_once_with()
 
+    def test_configure_ovs_no_sb_conn(self):
+        self.patch_object(handlers.reactive, 'endpoint_from_flag')
+        self.patch_object(handlers.charm, 'optional_interfaces')
+        self.patch_object(handlers.reactive, 'set_flag')
+        self.patch_object(handlers.reactive, 'is_flag_set', return_value=True)
+        ovsdb = mock.MagicMock()
+        ovsdb.db_sb_connection_strs = []
+        self.endpoint_from_flag.return_value = ovsdb
+        handlers.configure_ovs()
+        self.charm.configure_ovs.assert_called_once_with(
+            ','.join(ovsdb.db_sb_connection_strs), True)
+        self.charm.render_with_interfaces.assert_called_once_with(
+            self.optional_interfaces((ovsdb,),
+                                     'nova-compute.connected',
+                                     'amqp.connected'))
+        self.set_flag.assert_called_once_with('config.rendered')
+        self.charm.configure_bridges.assert_called_once_with()
+        self.charm.configure_iptables_rules.assert_called_once_with()
+        self.charm.assess_status.assert_called_once_with()
+
     def test_configure_nrpe(self):
         self.patch_object(handlers.reactive, 'endpoint_from_flag')
         self.endpoint_from_flag.return_value = 'nrpe-external-master'
