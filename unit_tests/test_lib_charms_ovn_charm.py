@@ -1811,6 +1811,35 @@ class TestOVNChassisCharmOvsExporter(Helper):
         self.install.assert_not_called()
         self.remove.assert_not_called()
 
+    def test_restart_exporter_inactive(self):
+        """Test restarting OVS exporter when it's currently inactive."""
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.patch_object(ovn_charm.ch_core.host, 'service_running')
+        self.service_running.return_value = False
+
+        self.target.restart_exporter(only_inactive=True)
+        self.service_restart.assert_called_once_with(
+            self.target.exporter_service)
+
+    def test_no_restart_exporter_active(self):
+        """Test exporter not getting restarted if it's already running."""
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.patch_object(ovn_charm.ch_core.host, 'service_running')
+        self.service_running.return_value = True
+
+        self.target.restart_exporter(only_inactive=True)
+        self.service_restart.assert_not_called()
+
+    def test_force_restart_exporter(self):
+        """Test restarting OVS exporter regardless of it's current state."""
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.patch_object(ovn_charm.ch_core.host, 'service_running')
+        self.service_running.return_value = True
+
+        self.target.restart_exporter(only_inactive=False)
+        self.service_restart.assert_called_once_with(
+            self.target.exporter_service)
+
 
 class TestSRIOVOVNChassisCharm(Helper):
 

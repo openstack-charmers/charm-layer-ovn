@@ -183,11 +183,13 @@ def provide_chassis_certificates_to_principal():
 
 
 @reactive.when_none('is-update-status-hook')
+@reactive.when('charm.installed')
 @reactive.when_any('config.changed.ovs-exporter-channel',
                    'snap.installed.prometheus-ovs-exporter')
 def reassess_exporter():
     with charm.provide_charm_instance() as instance:
         instance.assess_exporter()
+        instance.restart_exporter(only_inactive=True)
 
 
 @reactive.when_none('is-update-status-hook')
