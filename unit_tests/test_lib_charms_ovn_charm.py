@@ -249,22 +249,22 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
         setattr(self, 'config', None)
 
     def test_ovn_key(self):
-        self.assertEquals(self.target.ovn_key, '/etc/path/key_host')
+        self.assertEqual(self.target.ovn_key, '/etc/path/key_host')
 
     def test_ovn_cert(self):
-        self.assertEquals(self.target.ovn_cert, '/etc/path/cert_host')
+        self.assertEqual(self.target.ovn_cert, '/etc/path/cert_host')
 
     def test_ovn_ca_cert(self):
         self.charm_instance.name = mock.PropertyMock().return_value = 'name'
-        self.assertEquals(self.target.ovn_ca_cert, '/etc/path/name.crt')
+        self.assertEqual(self.target.ovn_ca_cert, '/etc/path/name.crt')
 
     def test_dpdk_device(self):
         self.assertDictEqual(self.target.dpdk_device.devices,
                              {'fakepci': 'fakeif'})
-        self.assertEquals(self.target.dpdk_device.driver, 'fakedriver')
+        self.assertEqual(self.target.dpdk_device.driver, 'fakedriver')
 
     def test_sriov_device(self):
-        self.assertEquals(self.target.sriov_device, self.SRIOVContext())
+        self.assertEqual(self.target.sriov_device, self.SRIOVContext())
 
     def _test_mlock_d(self, config_rv, container_rv, mlock_rv):
         hookenv = ovn_charm.ch_core.hookenv
@@ -272,7 +272,7 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
 
         self.patch_object(hookenv, 'config', return_value=config_rv)
         self.patch_object(host, 'is_container', return_value=container_rv)
-        self.assertEquals(self.target.mlockall_disabled, mlock_rv)
+        self.assertEqual(self.target.mlockall_disabled, mlock_rv)
 
     def test_mlockall_disabled_true(self):
         self._test_mlock_d(config_rv=True, container_rv=False, mlock_rv=True)
@@ -299,7 +299,7 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
             charm_instance=self.charm_instance)
         m.stop()
         setattr(self, 'config', None)
-        self.assertEquals('fake-source', self.target._ovn_source)
+        self.assertEqual('fake-source', self.target._ovn_source)
 
         # User has not supplied a ovn-source config, charm was installed at
         # this version on focal
@@ -310,17 +310,17 @@ class TestOVNConfigurationAdapter(test_utils.PatchHelper):
             charm_instance=self.charm_instance)
         m.stop()
         setattr(self, 'config', None)
-        self.assertEquals('cloud:focal-ovn-22.03', self.target._ovn_source)
+        self.assertEqual('cloud:focal-ovn-22.03', self.target._ovn_source)
 
         # User has not supplied a ovn-source config, charm was upgraded
         self.is_flag_set.return_value = False
-        self.assertEquals('', self.target._ovn_source)
+        self.assertEqual('', self.target._ovn_source)
 
         # User has not supplied a ovn-source config, charm was installed at
         # this version on jammy
         self.is_flag_set.return_value = True
         self.lsb_release.return_value = {'DISTRIB_CODENAME': 'jammy'}
-        self.assertEquals('', self.target._ovn_source)
+        self.assertEqual('', self.target._ovn_source)
 
 
 class TestOVNConfigurationAdapterSerial(test_utils.PatchHelper):
@@ -372,7 +372,7 @@ class TestOVNConfigurationAdapterSerial(test_utils.PatchHelper):
 			[RV] Reserved: checksum good, 1 byte(s) reserved
 		End
         '''  # noqa: W191, E101  to represent the real-world lspci output.
-        self.assertEquals(self.target.card_serial_number, 'deadbeefcafe')
+        self.assertEqual(self.target.card_serial_number, 'deadbeefcafe')
 
     def test_card_serial_no_spec(self):
         def _config_side_effect(k=None):
@@ -457,12 +457,12 @@ class TestOVNConfigurationAdapterDPDKOverlap(test_utils.PatchHelper):
         dpdk_context.pmd_cpu_mask.return_value = '0xaf009d'
         self.target = ovn_charm.OVNConfigurationAdapter(
             charm_instance=self.charm_instance)
-        self.assertEquals(self.target.validation_errors, {})
+        self.assertEqual(self.target.validation_errors, {})
         # 101011110000000011011111
         dpdk_context.pmd_cpu_mask.return_value = '0xaf00df'
         self.target = ovn_charm.OVNConfigurationAdapter(
             charm_instance=self.charm_instance)
-        self.assertEquals(self.target.validation_errors, {
+        self.assertEqual(self.target.validation_errors, {
             'pmd-cpu-mask': 'Fix overlap between dpdk-lcore-mask'
                             ' and pmd-cpu-mask.'})
 
@@ -546,10 +546,10 @@ class TestOVNChassisCharmWithOpenStack(Helper):
         self.enable_openstack.return_value = True
 
     def test_optional_openstack_metadata(self):
-        self.assertEquals(self.target.packages, [
+        self.assertEqual(self.target.packages, [
             'ovn-host', 'neutron-ovn-metadata-agent',
         ])
-        self.assertEquals(self.target.services, [
+        self.assertEqual(self.target.services, [
             'ovn-host', 'neutron-ovn-metadata-agent'])
         self.assertDictEqual(self.target.restart_map, {
             '/etc/default/openvswitch-switch': [],
@@ -558,7 +558,7 @@ class TestOVNChassisCharmWithOpenStack(Helper):
                 'neutron-ovn-metadata-agent'],
             '/etc/openvswitch/system-id.conf': [],
         })
-        self.assertEquals(self.target.nrpe_check_services, [
+        self.assertEqual(self.target.nrpe_check_services, [
             'ovn-controller', 'ovs-vswitchd', 'ovsdb-server',
             'neutron-ovn-metadata-agent'])
 
@@ -609,9 +609,9 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
 
         self.local_config['dpdk-runtime-libraries'] = 'hinic'
         target = ovn_charm.BaseOVNChassisCharm()
-        self.assertEquals(target.additional_dpdk_libraries, [
+        self.assertEqual(target.additional_dpdk_libraries, [
             'librte-net-hinic21'])
-        self.assertEquals(target.packages, [
+        self.assertEqual(target.packages, [
             'ovn-host', 'openvswitch-switch-dpdk', 'librte-net-hinic21'])
 
     def test_multiple_matches(self):
@@ -659,21 +659,21 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
 
         self.local_config['dpdk-runtime-libraries'] = 'mlx5'
         target = ovn_charm.BaseOVNChassisCharm()
-        self.assertEquals(target.additional_dpdk_libraries, [
+        self.assertEqual(target.additional_dpdk_libraries, [
             'librte-net-mlx5-21', 'librte-regex-mlx5-21',
             'librte-common-mlx5-21', 'librte-vdpa-mlx5-21'])
 
     def test_specific_package(self):
         self.local_config['dpdk-runtime-libraries'] = 'librte-net-mlx5-21'
         target = ovn_charm.BaseOVNChassisCharm()
-        self.assertEquals(target.additional_dpdk_libraries, [
+        self.assertEqual(target.additional_dpdk_libraries, [
             'librte-net-mlx5-21'])
         self.run.assert_not_called()
 
     def test_none_package(self):
         self.local_config['dpdk-runtime-libraries'] = 'None'
         target = ovn_charm.BaseOVNChassisCharm()
-        self.assertEquals(target.additional_dpdk_libraries, [])
+        self.assertEqual(target.additional_dpdk_libraries, [])
         self.run.assert_not_called()
 
     def test_multiple_packages(self):
@@ -737,7 +737,7 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
 
         self.local_config['dpdk-runtime-libraries'] = 'hinic mlx'
         target = ovn_charm.BaseOVNChassisCharm()
-        self.assertEquals(target.additional_dpdk_libraries, [
+        self.assertEqual(target.additional_dpdk_libraries, [
             'librte-net-hinic21', 'librte-net-mlx5-21', 'librte-regex-mlx5-21',
             'librte-common-mlx5-21', 'librte-vdpa-mlx5-21'])
 
@@ -746,7 +746,7 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
         self.called_process.stdout = ''
         self.local_config['dpdk-runtime-libraries'] = 'missing'
         target = ovn_charm.BaseOVNChassisCharm()
-        self.assertEquals(target.additional_dpdk_libraries, ['missing'])
+        self.assertEqual(target.additional_dpdk_libraries, ['missing'])
 
 
 class TestDPDKOVNChassisCharm(Helper):
@@ -771,7 +771,7 @@ class TestDPDKOVNChassisCharm(Helper):
                           '_ovs_dpdk_cpu_overlap_check')
 
     def test__init__(self):
-        self.assertEquals(self.target.packages, [
+        self.assertEqual(self.target.packages, [
             'ovn-host', 'openvswitch-switch-dpdk'])
         self.assertDictEqual(self.target.restart_map, {
             '/etc/default/openvswitch-switch': [],
@@ -906,19 +906,19 @@ class TestDPDKOVNChassisCharm(Helper):
 
         # DPDK 20.11.3 or newer
         self.cmp_pkgrevno.return_value = 0
-        self.assertEquals(
+        self.assertEqual(
             self.target.dpdk_eal_allow_devices(single_device),
             '-a 0000:42:01.0')
-        self.assertEquals(
+        self.assertEqual(
             self.target.dpdk_eal_allow_devices(devices),
             '-a 0000:42:01.0 -a 0000:42:02.0')
 
         # Older DPDK releases
         self.cmp_pkgrevno.return_value = -1
-        self.assertEquals(
+        self.assertEqual(
             self.target.dpdk_eal_allow_devices(single_device),
             '-w 0000:42:01.0')
-        self.assertEquals(
+        self.assertEqual(
             self.target.dpdk_eal_allow_devices(devices),
             '-w 0000:42:01.0 -w 0000:42:02.0')
 
@@ -994,7 +994,7 @@ class TestDPDKOVNChassisCharm(Helper):
                          (None, None))
 
     def test_purge_packages(self):
-        self.assertEquals(
+        self.assertEqual(
             self.target.purge_packages,
             [
                 'mlnx-switchdev-mode',
@@ -1104,8 +1104,8 @@ class TestOVNChassisCharm(Helper):
         super().setUp(config=self.local_config)
 
     def test_optional_openstack_metadata(self):
-        self.assertEquals(self.target.packages, ['ovn-host'])
-        self.assertEquals(self.target.services, ['ovn-host'])
+        self.assertEqual(self.target.packages, ['ovn-host'])
+        self.assertEqual(self.target.services, ['ovn-host'])
 
     def test_run(self):
         self.patch_object(ovn_charm.subprocess, 'run')
@@ -1171,8 +1171,8 @@ class TestOVNChassisCharm(Helper):
         self.target.configure_cert.assert_not_called()
 
     def test__format_addr(self):
-        self.assertEquals('1.2.3.4', self.target._format_addr('1.2.3.4'))
-        self.assertEquals(
+        self.assertEqual('1.2.3.4', self.target._format_addr('1.2.3.4'))
+        self.assertEqual(
             '[2001:db8::42]', self.target._format_addr('2001:db8::42'))
         with self.assertRaises(ValueError):
             self.target._format_addr('999.999.999.999')
@@ -1196,7 +1196,7 @@ class TestOVNChassisCharm(Helper):
                 }
             ]
         }
-        self.assertEquals(self.target.get_data_ip(), '10.5.0.102')
+        self.assertEqual(self.target.get_data_ip(), '10.5.0.102')
 
     def test_get_ovs_hostname(self):
         self.patch_object(ovn_charm.ch_ovsdb, 'SimpleOVSDB')
@@ -1204,7 +1204,7 @@ class TestOVNChassisCharm(Helper):
         opvs.open_vswitch.__iter__.return_value = [
             {'external_ids': {'hostname': 'fake-ovs-hostname'}}]
         self.SimpleOVSDB.return_value = opvs
-        self.assertEquals(self.target.get_ovs_hostname(), 'fake-ovs-hostname')
+        self.assertEqual(self.target.get_ovs_hostname(), 'fake-ovs-hostname')
 
     def test_configure_ovs(self):
         self.patch_target('run')
@@ -1539,7 +1539,7 @@ class TestOVNChassisCharm(Helper):
             '/usr/bin/env', 'python3', '/some/path/hooks/config-changed')
 
     def test_purge_packages(self):
-        self.assertEquals(
+        self.assertEqual(
             self.target.purge_packages,
             [
                 'mlnx-switchdev-mode',
@@ -1811,6 +1811,35 @@ class TestOVNChassisCharmOvsExporter(Helper):
         self.install.assert_not_called()
         self.remove.assert_not_called()
 
+    def test_restart_exporter_inactive(self):
+        """Test restarting OVS exporter when it's currently inactive."""
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.patch_object(ovn_charm.ch_core.host, 'service_running')
+        self.service_running.return_value = False
+
+        self.target.restart_exporter(only_inactive=True)
+        self.service_restart.assert_called_once_with(
+            self.target.exporter_service)
+
+    def test_no_restart_exporter_active(self):
+        """Test exporter not getting restarted if it's already running."""
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.patch_object(ovn_charm.ch_core.host, 'service_running')
+        self.service_running.return_value = True
+
+        self.target.restart_exporter(only_inactive=True)
+        self.service_restart.assert_not_called()
+
+    def test_force_restart_exporter(self):
+        """Test restarting OVS exporter regardless of it's current state."""
+        self.patch_object(ovn_charm.ch_core.host, 'service_restart')
+        self.patch_object(ovn_charm.ch_core.host, 'service_running')
+        self.service_running.return_value = True
+
+        self.target.restart_exporter(only_inactive=False)
+        self.service_restart.assert_called_once_with(
+            self.target.exporter_service)
+
 
 class TestSRIOVOVNChassisCharm(Helper):
 
@@ -1827,7 +1856,7 @@ class TestSRIOVOVNChassisCharm(Helper):
 
     def test__init__(self):
         self.maxDiff = None
-        self.assertEquals(self.target.packages, [
+        self.assertEqual(self.target.packages, [
             'ovn-host',
             'neutron-sriov-agent',
             'neutron-ovn-metadata-agent',
@@ -1842,8 +1871,8 @@ class TestSRIOVOVNChassisCharm(Helper):
             '/etc/neutron/neutron_ovn_metadata_agent.ini': [
                 'neutron-ovn-metadata-agent']
         })
-        self.assertEquals(self.target.group, 'neutron')
-        self.assertEquals(
+        self.assertEqual(self.target.group, 'neutron')
+        self.assertEqual(
             self.target.required_relations,
             ['certificates', 'ovsdb', 'amqp'])
 
@@ -1878,7 +1907,7 @@ class TestHWOffloadChassisCharm(Helper):
         })
 
     def test__init__(self):
-        self.assertEquals(self.target.packages, [
+        self.assertEqual(self.target.packages, [
             'ovn-host',
         ])
         self.assertDictEqual(self.target.restart_map, {
@@ -1886,7 +1915,7 @@ class TestHWOffloadChassisCharm(Helper):
             '/etc/default/openvswitch-switch': [],
             '/etc/openvswitch/system-id.conf': [],
         })
-        self.assertEquals(self.target.group, 'root')
+        self.assertEqual(self.target.group, 'root')
 
     def test_install(self):
         self.patch_target('configure_source')

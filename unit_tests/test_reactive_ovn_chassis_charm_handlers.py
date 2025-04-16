@@ -74,7 +74,6 @@ class TestRegisteredHooks(test_utils.TestRegisteredHooks):
                     'snap.installed.prometheus-ovs-exporter',
                 ),
                 'reassess_exporter': (
-                    handlers.OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
                     'charm.installed',
                 ),
                 'maybe_clear_metrics_endpoint': (
@@ -234,6 +233,14 @@ class TestOvnHandlers(test_utils.PatchHelper):
         handlers.configure_nrpe()
         self.provide_charm_instance.assert_has_calls([
             mock.call().__enter__().render_nrpe(),
+        ])
+
+    def test_reassess_exporter(self):
+        self.patch_object(handlers.charm, 'provide_charm_instance')
+        handlers.reassess_exporter()
+        self.provide_charm_instance.assert_has_calls([
+            mock.call().__enter__().assess_exporter(),
+            mock.call().__enter__().restart_exporter(only_inactive=True),
         ])
 
     def test_pause_unit_from_config(self):

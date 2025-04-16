@@ -461,6 +461,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         'ovsdb-server']
     nrpe_check_openstack_services = [
         'neutron-ovn-metadata-agent']
+    # ovs-exporter service name
+    exporter_service = 'snap.prometheus-ovs-exporter.ovs-exporter'
 
     @property
     def nrpe_check_services(self):
@@ -1432,3 +1434,25 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         else:
             snap.install('prometheus-ovs-exporter', channel=channel)
         snap.connect_all()
+
+    def restart_exporter(self, only_inactive=False):
+        """Restart OVS prometheus exporter service.
+
+        :param only_inactive: If set to True, and the service is already
+                              active, it wont' be restarted.
+        :type only_inactive: bool
+        :returns: None
+        """
+        needs_restart = (not only_inactive or
+                         not ch_core.host.service_running(
+                             self.exporter_service)
+                         )
+
+        if needs_restart:
+            ch_core.hookenv.log(
+                "Restarting OVS exporter", level=ch_core.hookenv.INFO)
+            ch_core.host.service_restart(self.exporter_service)
+        else:
+            ch_core.hookenv.log(
+                "Not restarting OVS exporter. Service is already active.",
+                level=ch_core.hookenv.INFO)
