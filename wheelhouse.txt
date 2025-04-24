@@ -3,3 +3,8 @@ jsonschema
 # https://github.com/pallets/jinja/issues/1496
 # https://github.com/juju/charm-tools/issues/646
 Jinja2<3;python_version == '3.8'
+
+# These dependencies are required for cos-agent
+# interface layer to work correctly.
+cosl==0.0.57
+ops==2.20.0
