@@ -6,6 +6,7 @@ includes:
   - interface:rabbitmq
   - interface:nrpe-external-master
   - interface:prometheus-scrape
+  - interface:cos-agent
 exclude: 
   - .gitignore
   - .stestr.conf

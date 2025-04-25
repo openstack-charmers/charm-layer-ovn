@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import contextlib
+import os
+
+from pathlib import Path
 
 import charmhelpers.core as ch_core
 
@@ -223,3 +226,25 @@ def maybe_clear_metrics_endpoint():
         return
 
     metrics_endpoint.clear_job(job_name)
+
+
+@reactive.when_none('is-update-status-hook')
+@reactive.when(OVN_CHASSIS_ENABLE_HANDLERS_FLAG,
+               'cos-agent.available',
+               'snap.installed.prometheus-ovs-exporter')
+def configure_cos_agent():
+    """Expose metrics endpoint and dashboards via cos-agent relation."""
+    already_configured = reactive.is_flag_set('cos-agent.configured')
+    is_upgrade_hook = ch_core.hookenv.hook_name() == 'upgrade-charm'
+
+    if is_upgrade_hook or not already_configured:
+        cos_agent = reactive.endpoint_from_flag('cos-agent.available')
+        dashboards_dir = Path(os.getenv('CHARM_DIR')).joinpath('files',
+                                                               'dashboards')
+        metrics_endpoint = cos_agent.MetricsEndpoint(
+            port=9475,
+            dashboards_dir=dashboards_dir
+        )
+
+        cos_agent.update_cos_agent([metrics_endpoint])
+        reactive.set_flag('cos-agent.configured')

@@ -17,3 +17,5 @@ provides:
     scope: container
   metrics-endpoint:
     interface: prometheus_scrape
+  cos-agent:
+    interface: cos_agent
