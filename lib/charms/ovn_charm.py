@@ -1367,6 +1367,7 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
         charm_nrpe = nrpe.NRPE(hostname=hostname, primary=primary)
         nrpe.add_init_service_checks(
             charm_nrpe, self.nrpe_check_services, current_unit)
+        nrpe.add_openvswitch_checks(charm_nrpe, current_unit)
         charm_nrpe.write()
 
     def configure_iptables_rules(self):
