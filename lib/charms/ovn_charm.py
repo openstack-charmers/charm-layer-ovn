@@ -348,7 +348,8 @@ class OVNConfigurationAdapter(
             vendor_id = spec['vendor_id']
             device_id = spec['device_id']
             out = subprocess.check_output(['lspci', '-d',
-                                           f'{vendor_id}:{device_id}', '-vv'])
+                                           f'{vendor_id}:{device_id}', '-vv'],
+                                          text=True)
             # If a device is not present the output will be empty.
             if not out:
                 continue
