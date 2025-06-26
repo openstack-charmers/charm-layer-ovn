@@ -346,7 +346,8 @@ options:
       hosts with different kinds of hardware or to specify the order of
       precedence if multiple devices from the list are present on a host. This
       should not normally happen with DPUs that only have one chip exposed.
-      Examples: [{"bus": "pci", "vendor_id": "15b3", "product_id": "a2d6" },
+
+      Example: '[{"bus": "pci", "vendor_id": "15b3", "device_id": "a2d6" }]'
   ovs-exporter-channel:
     type: string
     default: stable
