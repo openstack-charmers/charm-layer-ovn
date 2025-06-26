@@ -86,14 +86,14 @@ options:
       Space-delimited list of bond:port mappings. The DPDK assigned ports will
       be added to their corresponding bond, which in turn will be put into the
       bridge as specified in data-port.
-      .
+
       This option is supported only when enable-dpdk is true.
   dpdk-bond-config:
     type: string
     default: ":balance-tcp:active:fast"
     description: |
       Space delimited list of bond:mode:lacp:lacp-time, where the arguments meaning is:
-      .
+
           * bond - the bond name. If not specified the configuration applies to all bonds
           * mode - the bond mode of operation. Possible values are:
             - active-backup - No load balancing is offered in this mode and only one of
@@ -121,7 +121,7 @@ options:
     description: |
       Amount of hugepage memory in MB to allocate per NUMA socket in deployed
       systems.
-      .
+
       Only used when DPDK is enabled.
       NOTE: Please check that the value set here is large enough to accommodate the MTU
       size being used. For more information please refer to
@@ -132,7 +132,7 @@ options:
     description: |
       Number of cores to allocate to non-datapath DPDK threads per NUMA
       socket in deployed systems.
-      .
+
       Only used when DPDK is enabled.
   dpdk-driver:
     type: string
@@ -140,10 +140,10 @@ options:
     description: |
       Kernel userspace device driver to use for DPDK devices, valid values
       include:
-      .
+
         vfio-pci
         uio_pci_generic
-      .
+
       Only used when DPDK is enabled.
   dpdk-runtime-libraries:
     type: string
@@ -151,7 +151,7 @@ options:
     description: |
       Space delimited list of additional DPDK runtime libraries that should
       be installed when DPDK is enabled.
-      .
+
       By default, only the runtime libraries that are recommended with the
       dpdk libraries are installed. Environments that need additional libraries
       installed should include those library packages. The runtime libraries can
@@ -159,7 +159,7 @@ options:
       or by the simple name (e.g. bnx2x). When providing the simple name, a
       search is done of the apt-cache for a name matching `librte-*<name>*`
       for installation and will install all matching packages that are found.
-      .
+
       Only used when DPDK is enabled.
   enable-hardware-offload:
     type: boolean
@@ -167,13 +167,13 @@ options:
     description: |
       Enable support for hardware offload of flows from Open vSwitch to
       supported network adapters.
-      .
+
       Enabling this option will make use of the sriov-numvfs option to
       configure the VF functions of the physical network adapters detected in
       each unit.
-      .
+
       This option must not be enabled with either enable-sriov or enable-dpdk.
-      .
+
       NOTE: Changing this value will not perform runtime changes to hardware
       specific adaption. A reboot of the system is required to apply
       configuration.
@@ -234,9 +234,9 @@ options:
     default:
     description: |
       Space-delimited list of SR-IOV device mappings with format
-      .
+
         <provider>:<interface>
-      .
+
       Multiple mappings can be provided, delimited by spaces.
   sriov-numvfs:
     type: string
@@ -248,12 +248,12 @@ options:
       Either use a single integer to apply the same VF configuration to all
       detected SR-IOV devices or use a per-device configuration in the following
       format
-      .
+
         <device>:<numvfs>
-      .
+
       Multiple devices can be configured by providing multi values delimited by
       spaces.
-      .
+
       NOTE: Changing this value will have no effect on runtime configuration. A
       manual issue of the `netplan apply` command or reboot of the system is
       required to apply configuration.
@@ -262,14 +262,14 @@ options:
     default: false
     description: |
       Start new units of the application as paused.
-      .
+
       When set to 'true' newly deployed units of the application will install
       the charm and any packages required on the sytem, but keep any services
       from actually starting.
-      .
+
       To start the services the operator must run the `resume` action on each
       unit.
-      .
+
       This is useful for use with OpenStack for controlled unit by unit
       migration of deployments from the legacy Neutron ML2 OVS topology to the
       OVN topology. Both topologies make use of Open vSwitch and the 'br-int'
@@ -283,18 +283,18 @@ options:
       Prefer units of this application in CMS (Cloud Management System)
       scheduling of HA chassis groups (aka. gateways) over units of other OVN
       chassis applications present in this deployment.
-      .
+
       By default the CMS will schedule HA chassis groups across all chassis
       with bridge- and bridge interface mappings configured.
-      .
+
       This configuration option would allow you to influence where gateways are
       scheduled when all units have equal bridge- and bridge interface mapping
       configuration.
-      .
+
       NOTE: If none of the OVN chassis named applications in the deployment
       have this option enabled, the CMS will fall back to schedule gateways to
       chassis with bridge- and bridge interface mapping configured.
-      .
+
       NOTE: It is also possible to enable this option on several OVN chassis
       applications at the same time, e.g. on 2 out of 3.
   nagios_context:
@@ -316,16 +316,16 @@ options:
     default:
     description: |
       Disable Open vSwitch use of mlockall().
-      .
+
       When mlockall() is enabled, all of ovs-vswitchd's process memory is
       locked into physical RAM and prevented from paging. This avoids network
       interruptions but can lead to memory exhaustion in memory-constrained
       environments.
-      .
+
       By default, the charm will disable mlockall() if it is running in a
       container. Otherwise, the charm will default to mlockall() enabled if
       it is not running in a container.
-      .
+
       Changing this config option will restart openvswitch-switch, resulting
       in an expected data plane outage while the service restarts.
   vpd-device-spec:
@@ -335,18 +335,17 @@ options:
       A list of specs used by the charm to identify a device to be used as a
       primary source of Vital Product Data (VPD) containing a NIC serial number.
       This option can be used to enable SmartNIC DPU support.
-      .
+
       Based on the retrieved information the charm will set up a mapping between
       a chassis hostname and a unique card serial number of a NIC in the OVN
       southbound database. It can then used by the CMS to look up which chassis
       should service a port plugging request based on the information provided
       from a hypervisor host.
-      .
+
       Multiple items can be specified in the list in order to allow for
       hosts with different kinds of hardware or to specify the order of
       precedence if multiple devices from the list are present on a host. This
       should not normally happen with DPUs that only have one chip exposed.
-      .
       Examples: [{"bus": "pci", "vendor_id": "15b3", "product_id": "a2d6" },
   ovs-exporter-channel:
     type: string
