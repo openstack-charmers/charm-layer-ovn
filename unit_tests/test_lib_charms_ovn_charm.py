@@ -349,6 +349,8 @@ class TestOVNConfigurationAdapterSerial(test_utils.PatchHelper):
         self.patch_object(ovn_charm.subprocess, 'check_output')
         self.check_output.return_value = ''
         self.assertIsNone(self.target.card_serial_number)
+        self.check_output.assert_called_once_with(
+            ['lspci', '-d', 'b3ef:caf3', '-vv'], text=True)
 
     def test_card_serial_valid_serial(self):
         self.patch_object(ovn_charm.subprocess, 'check_output')
@@ -373,6 +375,8 @@ class TestOVNConfigurationAdapterSerial(test_utils.PatchHelper):
 		End
         '''  # noqa: W191, E101  to represent the real-world lspci output.
         self.assertEqual(self.target.card_serial_number, 'deadbeefcafe')
+        self.check_output.assert_called_once_with(
+            ['lspci', '-d', 'b3ef:caf3', '-vv'], text=True)
 
     def test_card_serial_no_spec(self):
         def _config_side_effect(k=None):
