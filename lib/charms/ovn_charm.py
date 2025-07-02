@@ -27,6 +27,7 @@ import charmhelpers.contrib.openstack.context as os_context
 import charmhelpers.contrib.network.ovs as ch_ovs
 import charmhelpers.contrib.network.ovs.ovsdb as ch_ovsdb
 import charmhelpers.contrib.openstack.deferred_events as deferred_events
+import charmhelpers.core.host as ch_host
 import charmhelpers.fetch as ch_fetch
 
 import charms_openstack.adapters
@@ -1300,6 +1301,12 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                 'other-config': {'disable-in-band': 'true'},
             },
         })
+
+        # We need to build a mac mapping to enable distributed ports on tenant
+        # VLAN networks.
+        # see: https://www.ovn.org/support/dist-docs/ovn-architecture.7.html
+        ovn_chassis_mac_mapping = ''
+
         for br in bim:
             if br not in ovnbridges:
                 continue
@@ -1331,12 +1338,36 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                            portdata={
                                                'external-ids': {
                                                    'charm-ovn-chassis': br}})
+            # We can use the MAC of the bridge as the unique chassis MAC. If
+            # a physical port has been added to the bridge, the MAC will most
+            # likely be inherited. If not, a unique mac will be generated
+            # anyway.
+            hw_addr = None
+            try:
+                hw_addr = ch_host.get_nic_hwaddr(br)
+            except Exception as err:
+                ch_core.hookenv.log('failed to get MAC for bridge "{}": {}'
+                                    .format(br, err),
+                                    level=ch_core.hookenv.ERROR)
+            if hw_addr:
+                networks = ovnbridges.get(br, [])
+                for net in networks:
+                    if ovn_chassis_mac_mapping:
+                        ovn_chassis_mac_mapping += ','
+                    ovn_chassis_mac_mapping += '{}:{}'.format(
+                        net, hw_addr)
 
         opvs = ch_ovsdb.SimpleOVSDB('ovs-vsctl').open_vswitch
         if ovn_br_map_str:
             opvs.set('.', 'external_ids:ovn-bridge-mappings', ovn_br_map_str)
         else:
             opvs.remove('.', 'external_ids', 'ovn-bridge-mappings')
+
+        if ovn_chassis_mac_mapping:
+            opvs.set('.', 'external_ids:ovn-chassis-mac-mappings',
+                     ovn_chassis_mac_mapping)
+        else:
+            opvs.remove('.', 'external_ids', 'ovn-chassis-mac-mappings')
 
         cms_opts = self._get_ovn_cms_options()
         if cms_opts:

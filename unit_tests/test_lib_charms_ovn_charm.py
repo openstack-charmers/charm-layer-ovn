@@ -785,6 +785,18 @@ class TestDPDKOVNChassisCharm(Helper):
         })
 
     def test_configure_bridges(self):
+        def mock_get_nic_hwaddr_fn(iface):
+            mac_mapping = {
+                "br-ex": "a0:36:9f:dd:37:dd",
+                "br-data": "a0:36:9f:dd:37:db",
+            }
+            return mac_mapping.get(iface, "")
+        mock_get_nic_hwaddr = mock.MagicMock()
+        mock_get_nic_hwaddr.side_effect = mock_get_nic_hwaddr_fn
+
+        self.patch_object(ovn_charm.ch_host, "get_nic_hwaddr")
+        self.get_nic_hwaddr.side_effect = mock_get_nic_hwaddr
+
         self.patch_object(ovn_charm.os_context, 'BridgePortInterfaceMap')
         dict_bpi = {
             'br-ex': {     # bridge
@@ -895,10 +907,17 @@ class TestDPDKOVNChassisCharm(Helper):
                 'data': 'fake',
                 'external-ids': {'charm-ovn-chassis': 'br-ex'}},
             linkup=False, promisc=None, portdata={
-                'external-ids': {'charm-ovn-chassis': 'br-ex'}}),
-        ovsdb.open_vswitch.set.assert_called_once_with(
-            '.', 'external_ids:ovn-bridge-mappings',
-            'other:br-data,provider:br-ex')
+                'external-ids': {'charm-ovn-chassis': 'br-ex'}})
+        ovsdb.open_vswitch.set.assert_has_calls([
+            mock.call(
+                '.', 'external_ids:ovn-bridge-mappings',
+                'other:br-data,provider:br-ex'
+            ),
+            mock.call(
+                '.', 'external_ids:ovn-chassis-mac-mappings',
+                'provider:a0:36:9f:dd:37:dd,other:a0:36:9f:dd:37:db'
+            ),
+        ], any_order=False)
         ovsdb.open_vswitch.remove.assert_called_once_with(
             '.', 'external_ids', 'ovn-cms-options')
 
