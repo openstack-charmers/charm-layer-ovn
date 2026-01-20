@@ -492,6 +492,7 @@ class Helper(test_utils.PatchHelper):
                 'enable-dpdk': False,
                 'bridge-interface-mappings': 'br-ex:eth0',
                 'prefer-chassis-as-gw': False,
+                'ovn-monitor-all': False,
                 'vpd-device-spec':
                 '[{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}]',
             }
@@ -574,6 +575,7 @@ class TestDPDKOVNChassisCharmExtraLibs(Helper):
             'ovn-bridge-mappings': (
                 'provider:br-ex other:br-data'),
             'prefer-chassis-as-gw': False,
+            'ovn-monitor-all': False,
             'dpdk-runtime-libraries': '',
             'vpd-device-spec': '',
             'ovn-source': 'distro',
@@ -760,6 +762,7 @@ class TestDPDKOVNChassisCharm(Helper):
             'ovn-bridge-mappings': (
                 'provider:br-ex other:br-data'),
             'prefer-chassis-as-gw': False,
+            'ovn-monitor-all': False,
             'dpdk-runtime-libraries': '',
             'vpd-device-spec': '',
             'pmd-cpu-set': '',
@@ -1093,6 +1096,7 @@ class TestOVNChassisCharm(Helper):
             'ovn-bridge-mappings': (
                 'provider:br-provider other:br-other'),
             'prefer-chassis-as-gw': True,
+            'ovn-monitor-all': True,
             'vpd-device-spec':
             '[{"bus": "pci", "vendor_id": "beef", "device_id": "cafe"}]',
             'ovn-source': 'distro',
@@ -1236,6 +1240,8 @@ class TestOVNChassisCharm(Helper):
                 'external-ids:ovn-remote=fake-sb-conn-str',
                 '--', 'set', 'open-vswitch', '.',
                 'external_ids:ovn-match-northd-version=False',
+                '--', 'set', 'open-vswitch', '.',
+                'external-ids:ovn-monitor-all=True',
             ),
         ])
         self.service_restart.assert_not_called()
@@ -1262,6 +1268,8 @@ class TestOVNChassisCharm(Helper):
                 'external-ids:ovn-remote=fake-sb-conn-str',
                 '--', 'set', 'open-vswitch', '.',
                 'external_ids:ovn-match-northd-version=False',
+                '--', 'set', 'open-vswitch', '.',
+                'external-ids:ovn-monitor-all=True',
             ),
             mock.call('ovs-vsctl', '--id', '@manager',
                       'create', 'Manager', 'target="ptcp:6640:127.0.0.1"',
@@ -1300,6 +1308,8 @@ class TestOVNChassisCharm(Helper):
                 'external-ids:ovn-remote=fake-sb-conn-str',
                 '--', 'set', 'open-vswitch', '.',
                 'external_ids:ovn-match-northd-version=True',
+                '--', 'set', 'open-vswitch', '.',
+                'external-ids:ovn-monitor-all=True',
             ),
         ])
 
