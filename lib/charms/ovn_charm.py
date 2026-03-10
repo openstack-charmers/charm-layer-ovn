@@ -1112,6 +1112,8 @@ class BaseOVNChassisCharm(charms_openstack.charm.OpenStackCharm):
                                'external-ids:ovn-remote={}'.format(sb_conn),
                                'external_ids:ovn-match-northd-version={}'
                                .format(self.options.enable_version_pinning),
+                               'external-ids:ovn-monitor-all={}'
+                               .format(self.options.ovn_monitor_all),
                                ):
                 cmd = cmd + ('--', 'set', 'open-vswitch', '.', ovs_ext_id)
             self.run(*cmd)

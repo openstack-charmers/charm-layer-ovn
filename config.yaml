@@ -364,3 +364,11 @@ options:
 
       If you are upgrading across LTS boundaries you may need to use version
       pinning to avoid data plane outage during the upgrade.
+  ovn-monitor-all:
+    type: boolean
+    default: false
+    description: |
+      A boolean value that tells if ovn-controller should monitor all records 
+      of tables in the OVN_Southbound database. If this option is set to false, 
+      ovn-controller will conditionally monitor only the records that are 
+      needed for the local chassis.
